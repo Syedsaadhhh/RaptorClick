@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     enable_paper_execution: bool = Field(default=False, validation_alias="ENABLE_PAPER_EXECUTION")
     featherless_api_key: str | None = Field(default=None, validation_alias="FEATHERLESS_API_KEY")
     featherless_base_url: str = Field(default="https://api.featherless.ai/v1", validation_alias="FEATHERLESS_BASE_URL")
-    featherless_model: str = Field(default="Qwen/Qwen3.8-27B", validation_alias="FEATHERLESS_MODEL")
+    featherless_model: str = Field(default="zai-org/GLM-5.3-Flash", validation_alias="FEATHERLESS_MODEL")
     reauction_drift_threshold_pct: float = Field(default=1.5, validation_alias="REAUCTION_DRIFT_THRESHOLD_PCT")
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
