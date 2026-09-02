@@ -1,0 +1,53 @@
+name: analytics
+
+on:
+  push:
+    branches: [main, "feature/**"]
+    paths:
+      - "src/raptor/analytics/**"
+      - "tests/analytics/**"
+      - "pyproject.toml"
+      - ".github/workflows/analytics.yml"
+  pull_request:
+    paths:
+      - "src/raptor/analytics/**"
+      - "tests/analytics/**"
+      - "pyproject.toml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.10 is the floor we target so nobody is blocked on a local upgrade
+        # mid-hackathon; 3.12 catches anything deprecated.
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run tests
+        run: pytest tests/analytics -v --cov=raptor.analytics --cov-report=term-missing
+
+      - name: Verify determinism across processes
+        # The in-process test proves repeated calls agree. This proves two
+        # separate interpreters agree, which is what actually matters when the
+        # backend and a scheduled job both generate a report.
+        run: |
+          python -m raptor.analytics.cli --fixture balanced > /tmp/run1.json
+          python -m raptor.analytics.cli --fixture balanced > /tmp/run2.json
+          diff /tmp/run1.json /tmp/run2.json && echo "deterministic across processes"
+
+      - name: Verify the CLI runs end to end
+        run: python -m raptor.analytics.cli --all
