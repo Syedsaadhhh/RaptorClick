@@ -54,8 +54,11 @@ from .types import (
     HedgeBid,
     HedgeEvaluation,
     HedgeInstrument,
+    LiquidityAssessment,
+    MetricStatus,
     PortfolioSnapshot,
     RiskAssessment,
+    ScoreComponent,
 )
 
 __all__ = [
@@ -65,6 +68,9 @@ __all__ = [
     "concentration_penalty",
     "hedge_payout",
     "parametric_var",
+    "assess_liquidity",
+    "maximum_hedge_risk",
+    "normalized_hedge_score",
 ]
 
 #: Instruments whose payoff is capped even when no explicit cap is supplied.
@@ -201,6 +207,147 @@ def hedge_payout(bid: HedgeBid, gross_loss: Decimal) -> Decimal:
     return q2(payout)
 
 
+def maximum_hedge_risk(bid: HedgeBid) -> Decimal:
+    """Return the maximum capital at risk in a supplied hedge structure.
+
+    Long puts, debit put spreads and defined-risk collars cannot lose more than
+    their net premium. For funded reserve or directional instruments, notional
+    is used as the conservative loss ceiling.
+    """
+    defined_risk_options = {
+        HedgeInstrument.PUT,
+        HedgeInstrument.PUT_SPREAD,
+        HedgeInstrument.COLLAR,
+    }
+    return bid.premium if bid.instrument in defined_risk_options else bid.notional
+
+
+def assess_liquidity(
+    bid: HedgeBid, config: AnalyticsConfig = DEFAULT_CONFIG
+) -> LiquidityAssessment:
+    """Assess spread, volume and open interest without inventing missing data."""
+    fields = {
+        "bid": bid.quote_bid,
+        "ask": bid.quote_ask,
+        "volume": bid.volume,
+        "open_interest": bid.open_interest,
+    }
+    missing = tuple(name for name, value in fields.items() if value is None)
+    if missing:
+        return LiquidityAssessment(
+            status=MetricStatus.UNAVAILABLE,
+            score=None,
+            spread=None,
+            spread_pct=None,
+            volume=bid.volume,
+            open_interest=bid.open_interest,
+            passed=None,
+            reasons=("Missing option data: " + ", ".join(missing) + ".",),
+        )
+
+    quote_bid = bid.quote_bid
+    quote_ask = bid.quote_ask
+    assert quote_bid is not None and quote_ask is not None
+    assert bid.volume is not None and bid.open_interest is not None
+    if quote_bid <= ZERO or quote_ask <= ZERO or quote_ask < quote_bid:
+        return LiquidityAssessment(
+            status=MetricStatus.INCONCLUSIVE,
+            score=None,
+            spread=None,
+            spread_pct=None,
+            volume=bid.volume,
+            open_interest=bid.open_interest,
+            passed=None,
+            reasons=("Bid/ask prices must be positive and ask must be at least bid.",),
+        )
+
+    spread = q4(quote_ask - quote_bid)
+    midpoint = (quote_ask + quote_bid) / Decimal("2")
+    spread_pct = q4(safe_div(spread, midpoint))
+    failures: list[str] = []
+    if spread_pct > config.max_quote_spread_pct:
+        failures.append(
+            f"spread {spread_pct} exceeds {config.max_quote_spread_pct}"
+        )
+    if bid.volume < config.min_option_volume:
+        failures.append(f"volume {bid.volume} is below {config.min_option_volume}")
+    if bid.open_interest < config.min_open_interest:
+        failures.append(
+            f"open interest {bid.open_interest} is below {config.min_open_interest}"
+        )
+
+    spread_component = clamp(
+        ONE - safe_div(spread_pct, config.max_quote_spread_pct), ZERO, ONE
+    )
+    volume_scale = max(config.min_option_volume * 5, 1)
+    interest_scale = max(config.min_open_interest * 5, 1)
+    volume_component = clamp(safe_div(bid.volume, volume_scale), ZERO, ONE)
+    interest_component = clamp(
+        safe_div(bid.open_interest, interest_scale), ZERO, ONE
+    )
+    score = q4(
+        Decimal("100")
+        * (
+            Decimal("0.50") * spread_component
+            + Decimal("0.20") * volume_component
+            + Decimal("0.30") * interest_component
+        )
+    )
+    return LiquidityAssessment(
+        status=MetricStatus.AVAILABLE,
+        score=score,
+        spread=spread,
+        spread_pct=spread_pct,
+        volume=bid.volume,
+        open_interest=bid.open_interest,
+        passed=not failures,
+        reasons=tuple(failures),
+    )
+
+
+def normalized_hedge_score(
+    coverage: Decimal,
+    cost_efficiency: Decimal,
+    premium_bps: Decimal,
+    liquidity: LiquidityAssessment,
+    config: AnalyticsConfig = DEFAULT_CONFIG,
+) -> Tuple[Decimal, Tuple[ScoreComponent, ...]]:
+    """Return a transparent 0-100 bid score and its weighted components."""
+    protection_score = q4(Decimal("100") * clamp(coverage, ZERO, ONE))
+    efficiency_score = q4(
+        Decimal("100") * clamp(safe_div(cost_efficiency, Decimal("3")), ZERO, ONE)
+    )
+    liquidity_score = liquidity.score if liquidity.score is not None else ZERO
+    cost_score = q4(
+        Decimal("100")
+        * clamp(ONE - safe_div(premium_bps, config.max_premium_bps), ZERO, ONE)
+    )
+    raw_components = (
+        ("protection", coverage, protection_score, config.hedge_weight_protection,
+         f"Covers {coverage} of modeled stress loss."),
+        ("cost_efficiency", cost_efficiency, efficiency_score,
+         config.hedge_weight_efficiency,
+         f"Returns {cost_efficiency}x premium in the selected stress."),
+        ("liquidity", liquidity_score, liquidity_score,
+         config.hedge_weight_liquidity,
+         "Uses bid/ask spread, volume and open interest; unavailable data scores zero."),
+        ("premium", premium_bps, cost_score, config.hedge_weight_cost,
+         f"Premium is {premium_bps}bps versus a {config.max_premium_bps}bps ceiling."),
+    )
+    components = tuple(
+        ScoreComponent(
+            name=name,
+            raw_value=q4(raw),
+            score=q4(score),
+            weight=weight,
+            contribution=q4(score * weight),
+            rationale=rationale,
+        )
+        for name, raw, score, weight, rationale in raw_components
+    )
+    return q4(sum(component.contribution for component in components)), components
+
+
 def evaluate_bid(
     bid: HedgeBid,
     risk: RiskAssessment,
@@ -236,6 +383,11 @@ def evaluate_bid(
 
     residual_loss = q2(max(ZERO, risk.stress_loss - payout + bid.premium))
     notional_gap = q2(max(ZERO, exposure.gross_exposure - bid.notional))
+    maximum_risk = q2(maximum_hedge_risk(bid))
+    liquidity = assess_liquidity(bid, config)
+    normalized_score, score_components = normalized_hedge_score(
+        coverage, cost_efficiency, bid.premium_bps, liquidity, config
+    )
 
     failures: list[str] = []
     if bid.premium_bps > config.max_premium_bps:
@@ -251,6 +403,16 @@ def evaluate_bid(
         failures.append(
             f"cost efficiency {cost_efficiency} is below "
             f"{config.min_cost_efficiency} - pays out less than it costs"
+        )
+    if liquidity.status is not MetricStatus.AVAILABLE:
+        failures.extend(liquidity.reasons)
+    elif not liquidity.passed:
+        failures.extend(liquidity.reasons)
+    if exposure.gross_exposure > ZERO and bid.notional > (
+        exposure.gross_exposure * config.max_hedge_notional_ratio
+    ):
+        failures.append(
+            f"notional exceeds {config.max_hedge_notional_ratio}x gross-exposure hard limit"
         )
 
     is_viable = not failures
@@ -274,6 +436,10 @@ def evaluate_bid(
         cost_efficiency=cost_efficiency,
         residual_loss=residual_loss,
         notional_gap=notional_gap,
+        maximum_risk=maximum_risk,
+        normalized_score=normalized_score,
+        score_components=score_components,
+        liquidity=liquidity,
         is_viable=is_viable,
         reason=reason,
     )
@@ -290,10 +456,11 @@ def evaluate_bids(
     Ranking, in priority order:
 
     1. Viable bids ahead of rejected ones.
-    2. Higher net benefit (payout minus premium) - the actual economic value.
-    3. Higher coverage, as a tie-break when benefit is equal.
-    4. Lower premium.
-    5. ``bid_id`` ascending - the final deterministic tie-break, so two
+    2. Higher normalized, inspectable hedge score.
+    3. Higher net benefit (payout minus premium).
+    4. Higher coverage, as a tie-break when benefit is equal.
+    5. Lower premium.
+    6. ``bid_id`` ascending - the final deterministic tie-break, so two
        identical offers never swap places between runs.
 
     Net benefit leads rather than raw premium: the cheapest hedge is worthless
@@ -306,6 +473,7 @@ def evaluate_bids(
             evaluations,
             key=lambda e: (
                 not e.is_viable,
+                -e.normalized_score,
                 -e.net_benefit,
                 -e.coverage_of_stress,
                 e.premium,

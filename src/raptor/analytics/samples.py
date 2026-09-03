@@ -174,8 +174,8 @@ def sample_bids(notional: Decimal = Decimal("150000")) -> List[HedgeBid]:
         * a fairly-priced put (should usually win),
         * a capped put spread (cheaper, less protection),
         * an overpriced put (rejected on premium),
-        * a token hedge (rejected on coverage),
-        * a zero-premium cash reserve (exercises the divide-by-zero path).
+        * a defined-risk collar with token coverage (rejected on coverage),
+        * a zero-premium reserve placeholder (exercises divide-by-zero safely).
     """
     return [
         HedgeBid(
@@ -187,6 +187,10 @@ def sample_bids(notional: Decimal = Decimal("150000")) -> List[HedgeBid]:
             coverage_ratio="0.90",
             buffer_pct="0.03",
             expiry_days=30,
+            quote_bid="4.80",
+            quote_ask="5.00",
+            volume=850,
+            open_interest=4200,
         ),
         HedgeBid(
             bid_id="bid-002",
@@ -198,6 +202,10 @@ def sample_bids(notional: Decimal = Decimal("150000")) -> List[HedgeBid]:
             buffer_pct="0.05",
             max_payout=notional * Decimal("0.15"),
             expiry_days=30,
+            quote_bid="2.90",
+            quote_ask="3.00",
+            volume=1250,
+            open_interest=6100,
         ),
         HedgeBid(
             bid_id="bid-003",
@@ -208,16 +216,25 @@ def sample_bids(notional: Decimal = Decimal("150000")) -> List[HedgeBid]:
             coverage_ratio="0.95",
             buffer_pct="0.02",
             expiry_days=45,
+            quote_bid="10.00",
+            quote_ask="10.50",
+            volume=440,
+            open_interest=2800,
         ),
         HedgeBid(
             bid_id="bid-004",
             provider="ThinShield",
-            instrument=HedgeInstrument.INVERSE_ETF,
+            instrument=HedgeInstrument.COLLAR,
             notional=notional * Decimal("0.25"),
             premium=notional * Decimal("0.002"),
             coverage_ratio="0.30",
             buffer_pct="0.10",
+            max_payout=notional * Decimal("0.08"),
             expiry_days=30,
+            quote_bid="1.00",
+            quote_ask="1.08",
+            volume=3000,
+            open_interest=9000,
         ),
         HedgeBid(
             bid_id="bid-005",
@@ -225,8 +242,12 @@ def sample_bids(notional: Decimal = Decimal("150000")) -> List[HedgeBid]:
             instrument=HedgeInstrument.CASH_RESERVE,
             notional=notional * Decimal("0.20"),
             premium=Decimal("0"),
-            coverage_ratio="1.00",
+            coverage_ratio="0.00",
             buffer_pct="0.00",
             expiry_days=90,
+            quote_bid="1.00",
+            quote_ask="1.00",
+            volume=10000,
+            open_interest=10000,
         ),
     ]

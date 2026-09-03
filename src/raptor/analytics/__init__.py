@@ -17,7 +17,7 @@ Guarantees
 * **Serialisable.** ``report.to_dict()`` is JSON-native with no custom encoder.
 
 See ``docs/analytics/README.md`` for the model write-up and
-``docs/analytics/contract.json`` for the wire schema.
+``docs/analytics/INTEGRATION.md`` for the wire contract.
 """
 
 from __future__ import annotations
@@ -30,6 +30,8 @@ from .config import (
     StressScenario,
 )
 from .drawdown import compute_drawdown
+from .drift import assess_state_drift
+from .counterfactual import compare_shadow_book
 from .engine import analyse, analyze
 from .errors import (
     AnalyticsError,
@@ -38,18 +40,30 @@ from .errors import (
     ValidationError,
 )
 from .exposure import compute_concentration, compute_exposure
-from .hedge import assess_risk, evaluate_bid, evaluate_bids, hedge_payout
+from .hedge import (
+    assess_liquidity,
+    assess_risk,
+    evaluate_bid,
+    evaluate_bids,
+    hedge_payout,
+    maximum_hedge_risk,
+    normalized_hedge_score,
+)
 from .scoring import band_score, compute_score, grade_for
 from .types import (
     SCHEMA_VERSION,
     AssetClass,
     ConcentrationMetrics,
     DrawdownMetrics,
+    DriftAssessment,
     EquityPoint,
     ExposureMetrics,
     HedgeBid,
     HedgeEvaluation,
     HedgeInstrument,
+    LiquidityAssessment,
+    MetricStatus,
+    PriceBar,
     PortfolioSnapshot,
     Position,
     ProtectionReport,
@@ -58,9 +72,13 @@ from .types import (
     RiskFlag,
     ScoreComponent,
     Severity,
+    ShadowComparison,
     Side,
     Verdict,
+    VolatilityEstimate,
+    VolatilityMetrics,
 )
+from .volatility import compute_historical_volatility
 
 __version__ = "0.1.0"
 
@@ -79,6 +97,7 @@ __all__ = [
     "PortfolioSnapshot",
     "Position",
     "EquityPoint",
+    "PriceBar",
     "HedgeBid",
     # output types
     "ProtectionReport",
@@ -90,12 +109,18 @@ __all__ = [
     "RiskAssessment",
     "HedgeEvaluation",
     "RiskFlag",
+    "VolatilityEstimate",
+    "VolatilityMetrics",
+    "LiquidityAssessment",
+    "ShadowComparison",
+    "DriftAssessment",
     # enums
     "Side",
     "AssetClass",
     "HedgeInstrument",
     "Verdict",
     "Severity",
+    "MetricStatus",
     # functions
     "compute_exposure",
     "compute_concentration",
@@ -104,6 +129,12 @@ __all__ = [
     "evaluate_bid",
     "evaluate_bids",
     "hedge_payout",
+    "assess_liquidity",
+    "maximum_hedge_risk",
+    "normalized_hedge_score",
+    "compute_historical_volatility",
+    "compare_shadow_book",
+    "assess_state_drift",
     "compute_score",
     "band_score",
     "grade_for",

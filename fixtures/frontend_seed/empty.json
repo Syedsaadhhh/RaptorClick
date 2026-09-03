@@ -1,0 +1,407 @@
+{
+  "schema_version": "1.1.0",
+  "account_id": "demo-empty",
+  "generated_at": "2025-08-31T13:00:00+00:00",
+  "exposure": {
+    "gross_exposure": "0.0000",
+    "net_exposure": "0.0000",
+    "long_exposure": "0.0000",
+    "short_exposure": "0.0000",
+    "beta_adjusted_exposure": "0.0000",
+    "gross_leverage": "0.0000",
+    "net_leverage": "0.0000",
+    "cash_ratio": "1.0000",
+    "position_count": 0,
+    "long_short_ratio": null,
+    "symbol_exposures": {},
+    "sector_exposures": {}
+  },
+  "concentration": {
+    "hhi": "0",
+    "effective_positions": "0",
+    "top_position_weight": "0",
+    "top_3_weight": "0",
+    "top_5_weight": "0",
+    "largest_symbol": null,
+    "sector_weights": {},
+    "top_sector": null,
+    "top_sector_weight": "0"
+  },
+  "drawdown": {
+    "max_drawdown": "0",
+    "max_drawdown_value": "0",
+    "current_drawdown": "0",
+    "peak_equity": "0",
+    "trough_equity": "0",
+    "recovery_needed": "0",
+    "ulcer_index": "0",
+    "periods_under_water": 0,
+    "observations": 0
+  },
+  "volatility": {
+    "status": "unavailable",
+    "annualization_periods": 252,
+    "estimates": [],
+    "reason": "No price bars were supplied."
+  },
+  "risk": {
+    "stress_loss": "0.00",
+    "stress_loss_pct": "0.0000",
+    "directional_loss": "0.00",
+    "idiosyncratic_loss": "0.00",
+    "parametric_var": "0",
+    "var_confidence": "0.95",
+    "scenario_name": "bear_shock",
+    "scenario_shock": "0.20",
+    "survives_stress": true
+  },
+  "score": {
+    "total": "90.00",
+    "grade": "A",
+    "verdict": "protected",
+    "components": [
+      {
+        "name": "exposure",
+        "raw_value": "0.0000",
+        "score": "100.0000",
+        "weight": "0.30",
+        "contribution": "30.0000",
+        "rationale": "Gross leverage 0.0000x is comfortably below the 1.5x limit."
+      },
+      {
+        "name": "concentration",
+        "raw_value": "0",
+        "score": "100.0000",
+        "weight": "0.25",
+        "contribution": "25.0000",
+        "rationale": "HHI 0 implies 0 effective positions."
+      },
+      {
+        "name": "drawdown",
+        "raw_value": "0",
+        "score": "50",
+        "weight": "0.20",
+        "contribution": "10.0000",
+        "rationale": "Insufficient equity history; scored neutral rather than assuming resilience that has not been demonstrated."
+      },
+      {
+        "name": "hedge",
+        "raw_value": "0.0000",
+        "score": "100.0000",
+        "weight": "0.25",
+        "contribution": "25.0000",
+        "rationale": "No viable hedge accepted; unhedged bear_shock loss is 0.0000 of equity."
+      }
+    ],
+    "flags": []
+  },
+  "hedge_evaluations": [
+    {
+      "bid_id": "bid-005",
+      "provider": "VaultReserve",
+      "instrument": "cash_reserve",
+      "premium": "0.00",
+      "premium_bps": "0.0000",
+      "expected_payout": "0",
+      "net_benefit": "0.00",
+      "coverage_of_stress": "0",
+      "cost_efficiency": "0.0000",
+      "residual_loss": "0.00",
+      "notional_gap": "0.00",
+      "maximum_risk": "30000.00",
+      "normalized_score": "35.0000",
+      "score_components": [
+        {
+          "name": "protection",
+          "raw_value": "0.0000",
+          "score": "0.0000",
+          "weight": "0.40",
+          "contribution": "0.0000",
+          "rationale": "Covers 0 of modeled stress loss."
+        },
+        {
+          "name": "cost_efficiency",
+          "raw_value": "0.0000",
+          "score": "0.0000",
+          "weight": "0.25",
+          "contribution": "0.0000",
+          "rationale": "Returns 0.0000x premium in the selected stress."
+        },
+        {
+          "name": "liquidity",
+          "raw_value": "100.0000",
+          "score": "100.0000",
+          "weight": "0.25",
+          "contribution": "25.0000",
+          "rationale": "Uses bid/ask spread, volume and open interest; unavailable data scores zero."
+        },
+        {
+          "name": "premium",
+          "raw_value": "0.0000",
+          "score": "100.0000",
+          "weight": "0.10",
+          "contribution": "10.0000",
+          "rationale": "Premium is 0.0000bps versus a 200bps ceiling."
+        }
+      ],
+      "liquidity": {
+        "status": "available",
+        "score": "100.0000",
+        "spread": "0.0000",
+        "spread_pct": "0.0000",
+        "volume": 10000,
+        "open_interest": 10000,
+        "passed": true,
+        "reasons": []
+      },
+      "is_viable": false,
+      "reason": "Rejected: covers only 0 of stress loss, below the 0.50 minimum."
+    },
+    {
+      "bid_id": "bid-002",
+      "provider": "MeridianRisk",
+      "instrument": "put_spread",
+      "premium": "1050.00",
+      "premium_bps": "70.0000",
+      "expected_payout": "0",
+      "net_benefit": "-1050.00",
+      "coverage_of_stress": "0",
+      "cost_efficiency": "0.0000",
+      "residual_loss": "1050.00",
+      "notional_gap": "0.00",
+      "maximum_risk": "1050.00",
+      "normalized_score": "28.6750",
+      "score_components": [
+        {
+          "name": "protection",
+          "raw_value": "0.0000",
+          "score": "0.0000",
+          "weight": "0.40",
+          "contribution": "0.0000",
+          "rationale": "Covers 0 of modeled stress loss."
+        },
+        {
+          "name": "cost_efficiency",
+          "raw_value": "0.0000",
+          "score": "0.0000",
+          "weight": "0.25",
+          "contribution": "0.0000",
+          "rationale": "Returns 0.0000x premium in the selected stress."
+        },
+        {
+          "name": "liquidity",
+          "raw_value": "88.7000",
+          "score": "88.7000",
+          "weight": "0.25",
+          "contribution": "22.1750",
+          "rationale": "Uses bid/ask spread, volume and open interest; unavailable data scores zero."
+        },
+        {
+          "name": "premium",
+          "raw_value": "70.0000",
+          "score": "65.0000",
+          "weight": "0.10",
+          "contribution": "6.5000",
+          "rationale": "Premium is 70.0000bps versus a 200bps ceiling."
+        }
+      ],
+      "liquidity": {
+        "status": "available",
+        "score": "88.7000",
+        "spread": "0.1000",
+        "spread_pct": "0.0339",
+        "volume": 1250,
+        "open_interest": 6100,
+        "passed": true,
+        "reasons": []
+      },
+      "is_viable": false,
+      "reason": "Rejected: covers only 0 of stress loss, below the 0.50 minimum; cost efficiency 0.0000 is below 1.0 - pays out less than it costs."
+    },
+    {
+      "bid_id": "bid-001",
+      "provider": "AtlasHedge",
+      "instrument": "put",
+      "premium": "1800.00",
+      "premium_bps": "120.0000",
+      "expected_payout": "0",
+      "net_benefit": "-1800.00",
+      "coverage_of_stress": "0",
+      "cost_efficiency": "0.0000",
+      "residual_loss": "1800.00",
+      "notional_gap": "0.00",
+      "maximum_risk": "1800.00",
+      "normalized_score": "25.6000",
+      "score_components": [
+        {
+          "name": "protection",
+          "raw_value": "0.0000",
+          "score": "0.0000",
+          "weight": "0.40",
+          "contribution": "0.0000",
+          "rationale": "Covers 0 of modeled stress loss."
+        },
+        {
+          "name": "cost_efficiency",
+          "raw_value": "0.0000",
+          "score": "0.0000",
+          "weight": "0.25",
+          "contribution": "0.0000",
+          "rationale": "Returns 0.0000x premium in the selected stress."
+        },
+        {
+          "name": "liquidity",
+          "raw_value": "86.4000",
+          "score": "86.4000",
+          "weight": "0.25",
+          "contribution": "21.6000",
+          "rationale": "Uses bid/ask spread, volume and open interest; unavailable data scores zero."
+        },
+        {
+          "name": "premium",
+          "raw_value": "120.0000",
+          "score": "40.0000",
+          "weight": "0.10",
+          "contribution": "4.0000",
+          "rationale": "Premium is 120.0000bps versus a 200bps ceiling."
+        }
+      ],
+      "liquidity": {
+        "status": "available",
+        "score": "86.4000",
+        "spread": "0.2000",
+        "spread_pct": "0.0408",
+        "volume": 850,
+        "open_interest": 4200,
+        "passed": true,
+        "reasons": []
+      },
+      "is_viable": false,
+      "reason": "Rejected: covers only 0 of stress loss, below the 0.50 minimum; cost efficiency 0.0000 is below 1.0 - pays out less than it costs."
+    },
+    {
+      "bid_id": "bid-004",
+      "provider": "ThinShield",
+      "instrument": "collar",
+      "premium": "300.00",
+      "premium_bps": "80.0000",
+      "expected_payout": "0",
+      "net_benefit": "-300.00",
+      "coverage_of_stress": "0",
+      "cost_efficiency": "0.0000",
+      "residual_loss": "300.00",
+      "notional_gap": "0.00",
+      "maximum_risk": "300.00",
+      "normalized_score": "24.5917",
+      "score_components": [
+        {
+          "name": "protection",
+          "raw_value": "0.0000",
+          "score": "0.0000",
+          "weight": "0.40",
+          "contribution": "0.0000",
+          "rationale": "Covers 0 of modeled stress loss."
+        },
+        {
+          "name": "cost_efficiency",
+          "raw_value": "0.0000",
+          "score": "0.0000",
+          "weight": "0.25",
+          "contribution": "0.0000",
+          "rationale": "Returns 0.0000x premium in the selected stress."
+        },
+        {
+          "name": "liquidity",
+          "raw_value": "74.3667",
+          "score": "74.3667",
+          "weight": "0.25",
+          "contribution": "18.5917",
+          "rationale": "Uses bid/ask spread, volume and open interest; unavailable data scores zero."
+        },
+        {
+          "name": "premium",
+          "raw_value": "80.0000",
+          "score": "60.0000",
+          "weight": "0.10",
+          "contribution": "6.0000",
+          "rationale": "Premium is 80.0000bps versus a 200bps ceiling."
+        }
+      ],
+      "liquidity": {
+        "status": "available",
+        "score": "74.3667",
+        "spread": "0.0800",
+        "spread_pct": "0.0769",
+        "volume": 3000,
+        "open_interest": 9000,
+        "passed": true,
+        "reasons": []
+      },
+      "is_viable": false,
+      "reason": "Rejected: covers only 0 of stress loss, below the 0.50 minimum; cost efficiency 0.0000 is below 1.0 - pays out less than it costs."
+    },
+    {
+      "bid_id": "bid-003",
+      "provider": "ApexCover",
+      "instrument": "put",
+      "premium": "5250.00",
+      "premium_bps": "350.0000",
+      "expected_payout": "0",
+      "net_benefit": "-5250.00",
+      "coverage_of_stress": "0",
+      "cost_efficiency": "0.0000",
+      "residual_loss": "5250.00",
+      "notional_gap": "0.00",
+      "maximum_risk": "5250.00",
+      "normalized_score": "20.9333",
+      "score_components": [
+        {
+          "name": "protection",
+          "raw_value": "0.0000",
+          "score": "0.0000",
+          "weight": "0.40",
+          "contribution": "0.0000",
+          "rationale": "Covers 0 of modeled stress loss."
+        },
+        {
+          "name": "cost_efficiency",
+          "raw_value": "0.0000",
+          "score": "0.0000",
+          "weight": "0.25",
+          "contribution": "0.0000",
+          "rationale": "Returns 0.0000x premium in the selected stress."
+        },
+        {
+          "name": "liquidity",
+          "raw_value": "83.7333",
+          "score": "83.7333",
+          "weight": "0.25",
+          "contribution": "20.9333",
+          "rationale": "Uses bid/ask spread, volume and open interest; unavailable data scores zero."
+        },
+        {
+          "name": "premium",
+          "raw_value": "350.0000",
+          "score": "0.0000",
+          "weight": "0.10",
+          "contribution": "0.0000",
+          "rationale": "Premium is 350.0000bps versus a 200bps ceiling."
+        }
+      ],
+      "liquidity": {
+        "status": "available",
+        "score": "83.7333",
+        "spread": "0.5000",
+        "spread_pct": "0.0488",
+        "volume": 440,
+        "open_interest": 2800,
+        "passed": true,
+        "reasons": []
+      },
+      "is_viable": false,
+      "reason": "Rejected: premium 350.0000bps exceeds the 200bps ceiling; covers only 0 of stress loss, below the 0.50 minimum; cost efficiency 0.0000 is below 1.0 - pays out less than it costs."
+    }
+  ],
+  "recommended_bid_id": null,
+  "shadow_comparison": null
+}

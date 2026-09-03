@@ -69,6 +69,7 @@ class StressScenario:
             )
 
     def to_dict(self) -> Dict[str, Any]:
+        """Return a JSON-native representation."""
         return {
             "name": self.name,
             "market_shock": format(self.market_shock, "f"),
@@ -160,6 +161,25 @@ class AnalyticsConfig:
     min_coverage_ratio: Decimal = Decimal("0.50")
     #: Payout per unit premium below this makes the hedge non-viable.
     min_cost_efficiency: Decimal = Decimal("1.0")
+    #: Quote/liquidity gates. All four source fields must be present; missing
+    #: fields produce an unavailable result rather than a zero score.
+    max_quote_spread_pct: Decimal = Decimal("0.15")
+    min_option_volume: int = 10
+    min_open_interest: int = 50
+    #: Prevent an agent from proposing protection materially larger than the
+    #: book it is meant to insure.
+    max_hedge_notional_ratio: Decimal = Decimal("1.25")
+
+    # -- Per-bid normalized score ---------------------------------------- #
+    hedge_weight_protection: Decimal = Decimal("0.40")
+    hedge_weight_efficiency: Decimal = Decimal("0.25")
+    hedge_weight_liquidity: Decimal = Decimal("0.25")
+    hedge_weight_cost: Decimal = Decimal("0.10")
+
+    # -- State drift / stale-bid policy --------------------------------- #
+    max_equity_drift: Decimal = Decimal("0.05")
+    max_gross_exposure_drift: Decimal = Decimal("0.10")
+    max_concentration_drift: Decimal = Decimal("0.05")
 
     # -- Scoring weights (must sum to 1) ---------------------------------- #
     #: Exposure is weighted highest: leverage is the fastest route to ruin.
@@ -189,6 +209,17 @@ class AnalyticsConfig:
                 "make two deployments disagree."
             )
 
+        hedge_weights = (
+            self.hedge_weight_protection
+            + self.hedge_weight_efficiency
+            + self.hedge_weight_liquidity
+            + self.hedge_weight_cost
+        )
+        if not is_close(hedge_weights, Decimal("1"), Decimal("0.0001")):
+            raise ConfigError(
+                f"hedge scoring weights must sum to 1.0, got {hedge_weights}"
+            )
+
         for name in (
             "max_gross_leverage",
             "max_net_leverage",
@@ -198,9 +229,16 @@ class AnalyticsConfig:
             "max_drawdown_tolerance",
             "var_z_score",
             "max_premium_bps",
+            "max_quote_spread_pct",
+            "max_hedge_notional_ratio",
+            "max_equity_drift",
+            "max_gross_exposure_drift",
+            "max_concentration_drift",
         ):
             if getattr(self, name) <= ZERO:
                 raise ConfigError(f"{name} must be positive")
+        if self.min_option_volume < 0 or self.min_open_interest < 0:
+            raise ConfigError("liquidity count thresholds cannot be negative")
 
         if not (self.score_protected > self.score_acceptable > self.score_exposed):
             raise ConfigError(
@@ -261,37 +299,52 @@ class AnalyticsConfig:
     def to_dict(self) -> Dict[str, Any]:
         """Serialise for reproducibility - a report can cite the exact config."""
 
-        def fmt(value: Any) -> Any:
+        def _fmt(value: Any) -> Any:
             if isinstance(value, Decimal):
                 return format(value, "f")
             return value
 
         return {
-            "max_gross_leverage": fmt(self.max_gross_leverage),
-            "max_net_leverage": fmt(self.max_net_leverage),
-            "max_hhi": fmt(self.max_hhi),
-            "max_position_weight": fmt(self.max_position_weight),
-            "max_sector_weight": fmt(self.max_sector_weight),
-            "max_top3_weight": fmt(self.max_top3_weight),
-            "max_drawdown_tolerance": fmt(self.max_drawdown_tolerance),
-            "critical_current_drawdown": fmt(self.critical_current_drawdown),
-            "var_z_score": fmt(self.var_z_score),
-            "var_confidence": fmt(self.var_confidence),
+            "max_gross_leverage": _fmt(self.max_gross_leverage),
+            "max_net_leverage": _fmt(self.max_net_leverage),
+            "max_hhi": _fmt(self.max_hhi),
+            "max_position_weight": _fmt(self.max_position_weight),
+            "max_sector_weight": _fmt(self.max_sector_weight),
+            "max_top3_weight": _fmt(self.max_top3_weight),
+            "max_drawdown_tolerance": _fmt(self.max_drawdown_tolerance),
+            "critical_current_drawdown": _fmt(self.critical_current_drawdown),
+            "var_z_score": _fmt(self.var_z_score),
+            "var_confidence": _fmt(self.var_confidence),
             "primary_scenario": self.primary_scenario,
-            "max_stress_loss_pct": fmt(self.max_stress_loss_pct),
-            "max_premium_bps": fmt(self.max_premium_bps),
-            "min_coverage_ratio": fmt(self.min_coverage_ratio),
-            "min_cost_efficiency": fmt(self.min_cost_efficiency),
+            "max_stress_loss_pct": _fmt(self.max_stress_loss_pct),
+            "max_premium_bps": _fmt(self.max_premium_bps),
+            "min_coverage_ratio": _fmt(self.min_coverage_ratio),
+            "min_cost_efficiency": _fmt(self.min_cost_efficiency),
+            "max_quote_spread_pct": _fmt(self.max_quote_spread_pct),
+            "min_option_volume": self.min_option_volume,
+            "min_open_interest": self.min_open_interest,
+            "max_hedge_notional_ratio": _fmt(self.max_hedge_notional_ratio),
+            "hedge_scoring_weights": {
+                "protection": _fmt(self.hedge_weight_protection),
+                "efficiency": _fmt(self.hedge_weight_efficiency),
+                "liquidity": _fmt(self.hedge_weight_liquidity),
+                "cost": _fmt(self.hedge_weight_cost),
+            },
+            "drift_thresholds": {
+                "equity": _fmt(self.max_equity_drift),
+                "gross_exposure": _fmt(self.max_gross_exposure_drift),
+                "concentration": _fmt(self.max_concentration_drift),
+            },
             "weights": {
-                "exposure": fmt(self.weight_exposure),
-                "concentration": fmt(self.weight_concentration),
-                "drawdown": fmt(self.weight_drawdown),
-                "hedge": fmt(self.weight_hedge),
+                "exposure": _fmt(self.weight_exposure),
+                "concentration": _fmt(self.weight_concentration),
+                "drawdown": _fmt(self.weight_drawdown),
+                "hedge": _fmt(self.weight_hedge),
             },
             "verdict_bands": {
-                "protected": fmt(self.score_protected),
-                "acceptable": fmt(self.score_acceptable),
-                "exposed": fmt(self.score_exposed),
+                "protected": _fmt(self.score_protected),
+                "acceptable": _fmt(self.score_acceptable),
+                "exposed": _fmt(self.score_exposed),
             },
             "scenarios": [s.to_dict() for s in self.scenarios],
         }

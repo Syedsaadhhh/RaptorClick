@@ -75,11 +75,15 @@ Instrument type matters — a put spread caps out, an inverse ETF does not.
 Collapsing them into one linear model would make the auction rank on price
 alone, which is the naive behaviour RaptorClick exists to beat.
 
-Bids rank by: viability first, then net benefit, then coverage, then premium,
-then `bid_id` as the final deterministic tie-break. **Net benefit leads, not
-price** — the cheapest hedge is worthless if it does not pay out. Three config
-gates (premium ceiling, minimum coverage, minimum cost efficiency) can reject a
-bid outright, and every evaluation carries a human-readable `reason`.
+Bids rank by viability, then the normalized score, net benefit, coverage,
+premium, and `bid_id` as the final deterministic tie-break. The normalized
+score exposes protection, cost-efficiency, liquidity, and premium components.
+Hard gates cover premium, minimum coverage, efficiency, quote validity, spread,
+volume, open interest, and excessive notional. Every rejection carries an
+inspectable reason.
+
+The selected bid is compared with the unprotected Shadow Book under the same
+scenario. `Protection Delta = payout - premium`, so cost is never hidden.
 
 If no bid clears the gates, `recommended_bid_id` is `None`. We never recommend
 the least-bad option; that would undermine the verdict the report is built on.
@@ -118,14 +122,17 @@ src/raptor/analytics/
   config.py    every threshold, weight and scenario in one frozen object
   exposure.py  gross/net/beta exposure, HHI, top-N, sector weights
   drawdown.py  max/current drawdown, recovery, ulcer index
-  hedge.py     stress scenarios, VaR, payoff model, bid ranking
+  volatility.py realized volatility from supplied market bars
+  hedge.py     stress scenarios, VaR, liquidity, payoff and bid ranking
+  counterfactual.py Shadow Book and net Protection Delta
+  drift.py     stale-state and re-auction decision
   scoring.py   band scoring, flags, overrides, verdict
   engine.py    analyse() — the single public entry point
   samples.py   five deterministic fixtures
   cli.py       demo, golden-file generation, schema dump, frontend seed
 tests/analytics/
   test_types.py test_exposure.py test_drawdown.py
-  test_hedge.py test_scoring.py test_determinism.py
+  test_hedge.py test_scoring.py test_determinism.py test_issue3_acceptance.py
 ```
 
 Thresholds live in `AnalyticsConfig`, never inline. Scattered constants are the

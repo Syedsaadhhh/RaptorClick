@@ -60,6 +60,12 @@ def compute_exposure(snapshot: PortfolioSnapshot) -> ExposureMetrics:
     gross = long_exposure + short_exposure
     net = long_exposure - short_exposure
     beta_adjusted = dsum(p.beta_adjusted_exposure for p in positions)
+    symbol_exposures = {p.symbol: q4(p.exposure) for p in positions}
+    sector_exposures: Dict[str, Decimal] = {}
+    for position in positions:
+        sector_exposures[position.sector] = (
+            sector_exposures.get(position.sector, ZERO) + position.exposure
+        )
 
     equity = snapshot.equity
 
@@ -86,6 +92,10 @@ def compute_exposure(snapshot: PortfolioSnapshot) -> ExposureMetrics:
         cash_ratio=q4(cash_ratio),
         position_count=len(positions),
         long_short_ratio=long_short_ratio,
+        symbol_exposures=symbol_exposures,
+        sector_exposures={
+            sector: q4(value) for sector, value in sector_exposures.items()
+        },
     )
 
 

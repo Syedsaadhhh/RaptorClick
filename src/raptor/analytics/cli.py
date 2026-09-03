@@ -29,6 +29,7 @@ from .samples import (
 )
 from .engine import analyse
 from .config import DEFAULT_CONFIG
+from .types import SCHEMA_VERSION
 
 _FIXTURES = {
     "balanced": balanced_portfolio,
@@ -53,7 +54,7 @@ def build_schema() -> Dict[str, Any]:
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "title": "RaptorClick ProtectionReport",
-        "version": "1.0.0",
+        "version": SCHEMA_VERSION,
         "description": (
             "Deterministic protection analytics output. All Decimal values are "
             "transported as strings to avoid precision loss across the JSON "
@@ -62,20 +63,22 @@ def build_schema() -> Dict[str, Any]:
         "type": "object",
         "required": [
             "schema_version", "account_id", "generated_at", "exposure",
-            "concentration", "drawdown", "risk", "score",
-            "hedge_evaluations", "recommended_bid_id",
+            "concentration", "drawdown", "volatility", "risk", "score",
+            "hedge_evaluations", "recommended_bid_id", "shadow_comparison",
         ],
         "properties": {
-            "schema_version": {"type": "string", "const": "1.0.0"},
+            "schema_version": {"type": "string", "const": SCHEMA_VERSION},
             "account_id": {"type": "string"},
             "generated_at": {"type": "string", "format": "date-time"},
             "exposure": {"type": "object"},
             "concentration": {"type": "object"},
             "drawdown": {"type": "object"},
+            "volatility": {"type": "object"},
             "risk": {"type": "object"},
             "score": {"type": "object"},
             "hedge_evaluations": {"type": "array"},
             "recommended_bid_id": {"type": ["string", "null"]},
+            "shadow_comparison": {"type": ["object", "null"]},
         },
     }
 
@@ -123,6 +126,7 @@ def _print_report(name: str) -> None:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """Run the analytics demo and artifact-generation commands."""
     parser = argparse.ArgumentParser(prog="raptor-analytics")
     parser.add_argument(
         "--fixture", choices=sorted(_FIXTURES),
@@ -154,6 +158,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.golden:
         target = root / "fixtures" / "golden_report.json"
+        target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(json.dumps(_report_for("balanced"), indent=2))
         print(f"wrote {target}")
         return 0

@@ -20,7 +20,6 @@ Copy these paths in, preserving structure:
 src/raptor/__init__.py
 src/raptor/analytics/*.py
 tests/analytics/*.py
-tests/run_with_stdlib.py
 docs/analytics/*.md
 .github/workflows/analytics.yml
 pyproject.toml            # merge if one already exists — see note below
@@ -33,8 +32,7 @@ the `[tool.pytest.ini_options]` block and `[tool.setuptools.packages.find]`
 
 ## 2. Verify before you push
 
-This is the step I could not complete — my sandbox had no network to install
-pytest, and the VM became unresponsive. Run it locally first.
+Create an isolated environment and run the same command used by CI.
 
 ```bash
 python -m venv .venv
@@ -44,17 +42,14 @@ pip install -e ".[dev]"
 pytest tests/analytics -v
 ```
 
-Expect a handful of hand-computed expectations to need last-decimal
-corrections — those are test-side fixes, not model bugs. If something fails,
-check the assertion against the actual output before changing any source.
-
 Then confirm the pipeline runs:
 
 ```bash
 python -m raptor.analytics.cli --all
 ```
 
-You should see the five fixtures scoring 95.46 / 70.78 / 39.99 / 39.99 / 90.00.
+You should see five fixture summaries and a recommended bid only when one
+passes every hard gate.
 
 Confirm determinism across processes:
 

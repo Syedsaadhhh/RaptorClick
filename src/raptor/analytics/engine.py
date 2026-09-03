@@ -28,10 +28,12 @@ from datetime import datetime
 from typing import Optional, Sequence
 
 from .config import DEFAULT_CONFIG, AnalyticsConfig
+from .counterfactual import compare_shadow_book
 from .drawdown import compute_drawdown
 from .exposure import compute_concentration, compute_exposure
 from .hedge import assess_risk, evaluate_bids
 from .scoring import compute_score
+from .volatility import compute_historical_volatility
 from .types import (
     SCHEMA_VERSION,
     HedgeBid,
@@ -81,6 +83,7 @@ def analyse(
     exposure = compute_exposure(snapshot)
     concentration = compute_concentration(snapshot)
     drawdown = compute_drawdown(snapshot)
+    volatility = compute_historical_volatility(snapshot.price_bars)
 
     risk = assess_risk(snapshot, exposure, concentration, config)
 
@@ -92,6 +95,10 @@ def analyse(
     best = evaluations[0] if evaluations and evaluations[0].is_viable else None
 
     score = compute_score(exposure, concentration, drawdown, risk, best, config)
+    bid_by_id = {bid.bid_id: bid for bid in bids}
+    shadow_comparison = (
+        compare_shadow_book(bid_by_id[best.bid_id], risk) if best is not None else None
+    )
 
     return ProtectionReport(
         schema_version=SCHEMA_VERSION,
@@ -100,10 +107,12 @@ def analyse(
         exposure=exposure,
         concentration=concentration,
         drawdown=drawdown,
+        volatility=volatility,
         risk=risk,
         score=score,
         hedge_evaluations=evaluations,
         recommended_bid_id=best.bid_id if best else None,
+        shadow_comparison=shadow_comparison,
     )
 
 

@@ -14,8 +14,8 @@ Design notes
   the seam between analytics and both other workstreams: the frontend (Issue #1)
   builds mocks from it, the backend (Issue #2) serialises it onto the event bus.
 
-Input models:  :class:`Position`, :class:`EquityPoint`, :class:`PortfolioSnapshot`,
-:class:`HedgeBid`.
+Input models:  :class:`Position`, :class:`EquityPoint`, :class:`PriceBar`,
+:class:`PortfolioSnapshot`, :class:`HedgeBid`.
 Output models: :class:`ExposureMetrics`, :class:`ConcentrationMetrics`,
 :class:`DrawdownMetrics`, :class:`RiskAssessment`, :class:`HedgeEvaluation`,
 :class:`ScoreComponent`, :class:`ProtectionScore`, :class:`ProtectionReport`.
@@ -40,8 +40,10 @@ __all__ = [
     "HedgeInstrument",
     "Verdict",
     "Severity",
+    "MetricStatus",
     "Position",
     "EquityPoint",
+    "PriceBar",
     "PortfolioSnapshot",
     "HedgeBid",
     "ExposureMetrics",
@@ -49,6 +51,11 @@ __all__ = [
     "DrawdownMetrics",
     "RiskAssessment",
     "HedgeEvaluation",
+    "VolatilityEstimate",
+    "VolatilityMetrics",
+    "LiquidityAssessment",
+    "ShadowComparison",
+    "DriftAssessment",
     "RiskFlag",
     "ScoreComponent",
     "ProtectionScore",
@@ -58,7 +65,7 @@ __all__ = [
 #: Bump on any breaking change to the JSON contract. The frontend pins this and
 #: the backend echoes it on every event, so a mismatch is caught at the seam
 #: rather than in a demo.
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"
 
 _SYMBOL_RE = re.compile(r"^[A-Z0-9][A-Z0-9._-]{0,15}$")
 
@@ -134,6 +141,14 @@ class Severity(str, Enum):
     INFO = "info"
     WARNING = "warning"
     CRITICAL = "critical"
+
+
+class MetricStatus(str, Enum):
+    """Whether a calculation had enough trustworthy source data."""
+
+    AVAILABLE = "available"
+    UNAVAILABLE = "unavailable"
+    INCONCLUSIVE = "inconclusive"
 
 
 _SEVERITY_RANK: Mapping[Severity, int] = {
@@ -248,6 +263,7 @@ class Position:
         return q2(self.market_value - self.cost_basis)
 
     def to_dict(self) -> Dict[str, Any]:
+        """Return a JSON-native representation."""
         return {
             "symbol": self.symbol,
             "side": self.side.value,
@@ -289,9 +305,39 @@ class EquityPoint:
         object.__setattr__(self, "equity", q2(eq))
 
     def to_dict(self) -> Dict[str, Any]:
+        """Return a JSON-native representation."""
         return {
             "timestamp": self.timestamp.isoformat(),
             "equity": _dec_str(self.equity),
+        }
+
+
+@dataclass(frozen=True, init=False)
+class PriceBar:
+    """One sanitized closing-price observation supplied by market data."""
+
+    symbol: str
+    timestamp: datetime
+    close: Decimal
+
+    def __init__(self, symbol: str, timestamp: datetime, close: Numeric) -> None:
+        object.__setattr__(self, "symbol", _require_symbol(symbol))
+        if not isinstance(timestamp, datetime):
+            raise ValidationError("price-bar timestamp must be a datetime")
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+        close_d = D(close)
+        if close_d <= ZERO:
+            raise ValidationError(f"{self.symbol}: bar close must be positive, got {close_d}")
+        object.__setattr__(self, "timestamp", timestamp.astimezone(timezone.utc))
+        object.__setattr__(self, "close", q4(close_d))
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return a JSON-native representation."""
+        return {
+            "symbol": self.symbol,
+            "timestamp": self.timestamp.isoformat(),
+            "close": _dec_str(self.close),
         }
 
 
@@ -309,6 +355,7 @@ class PortfolioSnapshot:
             order the backend happened to fetch them in.
         buying_power: optional, informational.
         history: optional equity curve for drawdown analysis.
+        price_bars: optional sanitized market closes for historical volatility.
 
     Raises:
         ValidationError: on negative equity, duplicate symbols, or unsorted
@@ -322,6 +369,7 @@ class PortfolioSnapshot:
     positions: Tuple[Position, ...]
     buying_power: Optional[Decimal] = None
     history: Tuple[EquityPoint, ...] = field(default_factory=tuple)
+    price_bars: Tuple[PriceBar, ...] = field(default_factory=tuple)
 
     def __init__(
         self,
@@ -332,6 +380,7 @@ class PortfolioSnapshot:
         positions: Sequence[Position] = (),
         buying_power: Optional[Numeric] = None,
         history: Sequence[EquityPoint] = (),
+        price_bars: Sequence[PriceBar] = (),
     ) -> None:
         if not account_id or not str(account_id).strip():
             raise ValidationError("account_id is required")
@@ -368,6 +417,13 @@ class PortfolioSnapshot:
                     f"{type(point).__name__}"
                 )
 
+        for bar in price_bars:
+            if not isinstance(bar, PriceBar):
+                raise ValidationError(
+                    f"price_bars must contain PriceBar instances, got "
+                    f"{type(bar).__name__}"
+                )
+
         object.__setattr__(self, "account_id", str(account_id).strip())
         object.__setattr__(self, "timestamp", timestamp.astimezone(timezone.utc))
         object.__setattr__(self, "cash", q2(cash))
@@ -382,6 +438,11 @@ class PortfolioSnapshot:
         object.__setattr__(
             self, "history", tuple(sorted(history, key=lambda h: h.timestamp))
         )
+        object.__setattr__(
+            self,
+            "price_bars",
+            tuple(sorted(price_bars, key=lambda b: (b.symbol, b.timestamp))),
+        )
 
     @property
     def is_empty(self) -> bool:
@@ -389,6 +450,7 @@ class PortfolioSnapshot:
         return len(self.positions) == 0
 
     def to_dict(self) -> Dict[str, Any]:
+        """Return a JSON-native representation."""
         return {
             "account_id": self.account_id,
             "timestamp": self.timestamp.isoformat(),
@@ -399,6 +461,7 @@ class PortfolioSnapshot:
             ),
             "positions": [p.to_dict() for p in self.positions],
             "history": [h.to_dict() for h in self.history],
+            "price_bars": [b.to_dict() for b in self.price_bars],
         }
 
 
@@ -418,6 +481,10 @@ class HedgeBid:
             deductible.
         max_payout: optional cap. Required for capped structures like spreads.
         expiry_days: tenor in days.
+        quote_bid: current contract or conservative multi-leg bid.
+        quote_ask: current contract or conservative multi-leg ask.
+        volume: reported option volume; missing stays unavailable.
+        open_interest: reported option open interest; missing stays unavailable.
 
     Raises:
         ValidationError: on negative notional/premium, a coverage ratio or
@@ -433,6 +500,10 @@ class HedgeBid:
     buffer_pct: Decimal
     max_payout: Optional[Decimal] = None
     expiry_days: int = 30
+    quote_bid: Optional[Decimal] = None
+    quote_ask: Optional[Decimal] = None
+    volume: Optional[int] = None
+    open_interest: Optional[int] = None
 
     def __init__(
         self,
@@ -445,6 +516,10 @@ class HedgeBid:
         buffer_pct: Numeric = ZERO,
         max_payout: Optional[Numeric] = None,
         expiry_days: int = 30,
+        quote_bid: Optional[Numeric] = None,
+        quote_ask: Optional[Numeric] = None,
+        volume: Optional[int] = None,
+        open_interest: Optional[int] = None,
     ) -> None:
         if not bid_id or not str(bid_id).strip():
             raise ValidationError("bid_id is required")
@@ -480,6 +555,10 @@ class HedgeBid:
             )
         if max_payout is not None and D(max_payout) <= ZERO:
             raise ValidationError(f"{bid_id}: max_payout must be positive when set")
+        if volume is not None and int(volume) < 0:
+            raise ValidationError(f"{bid_id}: volume cannot be negative")
+        if open_interest is not None and int(open_interest) < 0:
+            raise ValidationError(f"{bid_id}: open_interest cannot be negative")
 
         object.__setattr__(self, "bid_id", str(bid_id).strip())
         object.__setattr__(self, "provider", str(provider).strip())
@@ -492,6 +571,18 @@ class HedgeBid:
             self, "max_payout", None if max_payout is None else q2(max_payout)
         )
         object.__setattr__(self, "expiry_days", int(expiry_days))
+        object.__setattr__(
+            self, "quote_bid", None if quote_bid is None else q4(quote_bid)
+        )
+        object.__setattr__(
+            self, "quote_ask", None if quote_ask is None else q4(quote_ask)
+        )
+        object.__setattr__(self, "volume", None if volume is None else int(volume))
+        object.__setattr__(
+            self,
+            "open_interest",
+            None if open_interest is None else int(open_interest),
+        )
 
     @property
     def premium_bps(self) -> Decimal:
@@ -505,6 +596,7 @@ class HedgeBid:
         return q4(safe_div(self.premium, self.notional) * Decimal("10000"))
 
     def to_dict(self) -> Dict[str, Any]:
+        """Return a JSON-native representation."""
         return {
             "bid_id": self.bid_id,
             "provider": self.provider,
@@ -516,6 +608,10 @@ class HedgeBid:
             "buffer_pct": _dec_str(self.buffer_pct),
             "max_payout": None if self.max_payout is None else _dec_str(self.max_payout),
             "expiry_days": self.expiry_days,
+            "quote_bid": None if self.quote_bid is None else _dec_str(self.quote_bid),
+            "quote_ask": None if self.quote_ask is None else _dec_str(self.quote_ask),
+            "volume": self.volume,
+            "open_interest": self.open_interest,
         }
 
 
@@ -538,8 +634,11 @@ class ExposureMetrics:
     cash_ratio: Decimal
     position_count: int
     long_short_ratio: Optional[Decimal] = None
+    symbol_exposures: Mapping[str, Decimal] = field(default_factory=dict)
+    sector_exposures: Mapping[str, Decimal] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
+        """Return a JSON-native representation."""
         return {
             "gross_exposure": _dec_str(self.gross_exposure),
             "net_exposure": _dec_str(self.net_exposure),
@@ -553,6 +652,14 @@ class ExposureMetrics:
             "long_short_ratio": (
                 None if self.long_short_ratio is None else _dec_str(self.long_short_ratio)
             ),
+            "symbol_exposures": {
+                key: _dec_str(value)
+                for key, value in sorted(self.symbol_exposures.items())
+            },
+            "sector_exposures": {
+                key: _dec_str(value)
+                for key, value in sorted(self.sector_exposures.items())
+            },
         }
 
 
@@ -571,6 +678,7 @@ class ConcentrationMetrics:
     top_sector_weight: Decimal
 
     def to_dict(self) -> Dict[str, Any]:
+        """Return a JSON-native representation."""
         return {
             "hhi": _dec_str(self.hhi),
             "effective_positions": _dec_str(self.effective_positions),
@@ -602,6 +710,7 @@ class DrawdownMetrics:
     observations: int
 
     def to_dict(self) -> Dict[str, Any]:
+        """Return a JSON-native representation."""
         return {
             "max_drawdown": _dec_str(self.max_drawdown),
             "max_drawdown_value": _dec_str(self.max_drawdown_value),
@@ -630,6 +739,7 @@ class RiskAssessment:
     survives_stress: bool
 
     def to_dict(self) -> Dict[str, Any]:
+        """Return a JSON-native representation."""
         return {
             "stress_loss": _dec_str(self.stress_loss),
             "stress_loss_pct": _dec_str(self.stress_loss_pct),
@@ -640,6 +750,133 @@ class RiskAssessment:
             "scenario_name": self.scenario_name,
             "scenario_shock": _dec_str(self.scenario_shock),
             "survives_stress": self.survives_stress,
+        }
+
+
+@dataclass(frozen=True)
+class VolatilityEstimate:
+    """Historical volatility result for one supplied symbol."""
+
+    symbol: str
+    status: MetricStatus
+    annualized_volatility: Optional[Decimal]
+    observations: int
+    reason: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return a JSON-native representation with no fabricated fallback."""
+        return {
+            "symbol": self.symbol,
+            "status": self.status.value,
+            "annualized_volatility": (
+                None
+                if self.annualized_volatility is None
+                else _dec_str(self.annualized_volatility)
+            ),
+            "observations": self.observations,
+            "reason": self.reason,
+        }
+
+
+@dataclass(frozen=True)
+class VolatilityMetrics:
+    """Deterministic realized volatility calculated only from supplied bars."""
+
+    status: MetricStatus
+    annualization_periods: int
+    estimates: Tuple[VolatilityEstimate, ...]
+    reason: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return a JSON-native representation."""
+        return {
+            "status": self.status.value,
+            "annualization_periods": self.annualization_periods,
+            "estimates": [estimate.to_dict() for estimate in self.estimates],
+            "reason": self.reason,
+        }
+
+
+@dataclass(frozen=True)
+class LiquidityAssessment:
+    """Inspectable quote, spread, volume and open-interest checks for a bid."""
+
+    status: MetricStatus
+    score: Optional[Decimal]
+    spread: Optional[Decimal]
+    spread_pct: Optional[Decimal]
+    volume: Optional[int]
+    open_interest: Optional[int]
+    passed: Optional[bool]
+    reasons: Tuple[str, ...] = ()
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return a JSON-native representation."""
+        return {
+            "status": self.status.value,
+            "score": None if self.score is None else _dec_str(self.score),
+            "spread": None if self.spread is None else _dec_str(self.spread),
+            "spread_pct": (
+                None if self.spread_pct is None else _dec_str(self.spread_pct)
+            ),
+            "volume": self.volume,
+            "open_interest": self.open_interest,
+            "passed": self.passed,
+            "reasons": list(self.reasons),
+        }
+
+
+@dataclass(frozen=True)
+class ShadowComparison:
+    """Protected outcome versus the unprotected Shadow Book."""
+
+    bid_id: str
+    scenario_name: str
+    unprotected_loss: Decimal
+    hedge_payout: Decimal
+    hedge_cost: Decimal
+    protected_loss: Decimal
+    protection_delta: Decimal
+    protection_delta_pct: Optional[Decimal]
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return a JSON-native representation."""
+        return {
+            "bid_id": self.bid_id,
+            "scenario_name": self.scenario_name,
+            "unprotected_loss": _dec_str(self.unprotected_loss),
+            "hedge_payout": _dec_str(self.hedge_payout),
+            "hedge_cost": _dec_str(self.hedge_cost),
+            "protected_loss": _dec_str(self.protected_loss),
+            "protection_delta": _dec_str(self.protection_delta),
+            "protection_delta_pct": (
+                None
+                if self.protection_delta_pct is None
+                else _dec_str(self.protection_delta_pct)
+            ),
+        }
+
+
+@dataclass(frozen=True)
+class DriftAssessment:
+    """Decision explaining whether prior analytics must be re-auctioned."""
+
+    is_stale: bool
+    equity_drift: Decimal
+    gross_exposure_drift: Decimal
+    concentration_drift: Decimal
+    symbols_changed: bool
+    reasons: Tuple[str, ...]
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return a JSON-native representation."""
+        return {
+            "is_stale": self.is_stale,
+            "equity_drift": _dec_str(self.equity_drift),
+            "gross_exposure_drift": _dec_str(self.gross_exposure_drift),
+            "concentration_drift": _dec_str(self.concentration_drift),
+            "symbols_changed": self.symbols_changed,
+            "reasons": list(self.reasons),
         }
 
 
@@ -658,10 +895,15 @@ class HedgeEvaluation:
     cost_efficiency: Decimal
     residual_loss: Decimal
     notional_gap: Decimal
+    maximum_risk: Decimal
+    normalized_score: Decimal
+    score_components: Tuple[ScoreComponent, ...]
+    liquidity: LiquidityAssessment
     is_viable: bool
     reason: str
 
     def to_dict(self) -> Dict[str, Any]:
+        """Return a JSON-native representation."""
         return {
             "bid_id": self.bid_id,
             "provider": self.provider,
@@ -674,6 +916,10 @@ class HedgeEvaluation:
             "cost_efficiency": _dec_str(self.cost_efficiency),
             "residual_loss": _dec_str(self.residual_loss),
             "notional_gap": _dec_str(self.notional_gap),
+            "maximum_risk": _dec_str(self.maximum_risk),
+            "normalized_score": _dec_str(self.normalized_score),
+            "score_components": [component.to_dict() for component in self.score_components],
+            "liquidity": self.liquidity.to_dict(),
             "is_viable": self.is_viable,
             "reason": self.reason,
         }
@@ -691,6 +937,7 @@ class RiskFlag:
     threshold: Decimal
 
     def to_dict(self) -> Dict[str, Any]:
+        """Return a JSON-native representation."""
         return {
             "code": self.code,
             "severity": self.severity.value,
@@ -717,6 +964,7 @@ class ScoreComponent:
     rationale: str
 
     def to_dict(self) -> Dict[str, Any]:
+        """Return a JSON-native representation."""
         return {
             "name": self.name,
             "raw_value": _dec_str(self.raw_value),
@@ -738,6 +986,7 @@ class ProtectionScore:
     flags: Tuple[RiskFlag, ...]
 
     def to_dict(self) -> Dict[str, Any]:
+        """Return a JSON-native representation."""
         return {
             "total": _dec_str(self.total),
             "grade": self.grade,
@@ -761,12 +1010,15 @@ class ProtectionReport:
     exposure: ExposureMetrics
     concentration: ConcentrationMetrics
     drawdown: DrawdownMetrics
+    volatility: VolatilityMetrics
     risk: RiskAssessment
     score: ProtectionScore
     hedge_evaluations: Tuple[HedgeEvaluation, ...] = ()
     recommended_bid_id: Optional[str] = None
+    shadow_comparison: Optional[ShadowComparison] = None
 
     def to_dict(self) -> Dict[str, Any]:
+        """Return the stable JSON contract consumed by API and frontend."""
         return {
             "schema_version": self.schema_version,
             "account_id": self.account_id,
@@ -774,10 +1026,14 @@ class ProtectionReport:
             "exposure": self.exposure.to_dict(),
             "concentration": self.concentration.to_dict(),
             "drawdown": self.drawdown.to_dict(),
+            "volatility": self.volatility.to_dict(),
             "risk": self.risk.to_dict(),
             "score": self.score.to_dict(),
             "hedge_evaluations": [h.to_dict() for h in self.hedge_evaluations],
             "recommended_bid_id": self.recommended_bid_id,
+            "shadow_comparison": (
+                None if self.shadow_comparison is None else self.shadow_comparison.to_dict()
+            ),
         }
 
 

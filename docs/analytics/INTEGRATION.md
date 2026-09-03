@@ -5,16 +5,16 @@ guarantees, so neither side has to guess.
 
 ## Ownership
 
-Analytics owns `src/raptor/analytics/**` and `tests/analytics/**` and touches
-nothing else. `src/raptor/__init__.py` is a PEP 420 namespace package, so the
-backend can add `raptor.api` and `raptor.agents` in the same tree without
-either branch editing a shared file. That is the mechanical reason these
-branches merge without a rewrite.
+Analytics owns `src/raptor/analytics/**` and `tests/analytics/**`. The backend
+can add sibling packages under `src/raptor/` without coupling API code to the
+calculation modules.
 
 ## The entire public API
 
 ```python
-from raptor.analytics import analyse, PortfolioSnapshot, Position, EquityPoint, HedgeBid
+from raptor.analytics import (
+    EquityPoint, HedgeBid, PortfolioSnapshot, Position, PriceBar, analyse,
+)
 
 report = analyse(snapshot, bids, config=DEFAULT_CONFIG, generated_at=None)
 payload = report.to_dict()   # JSON-native, no custom encoder
@@ -49,6 +49,10 @@ snapshot = PortfolioSnapshot(
         for p in alpaca_positions
     ],
     history=[EquityPoint(bar.timestamp, bar.equity) for bar in portfolio_history],
+    price_bars=[
+        PriceBar(bar.symbol, bar.timestamp, bar.close)
+        for bar in sanitized_market_bars
+    ],
 )
 ```
 
@@ -63,6 +67,12 @@ And duplicate symbols are rejected, so merge fills before building the snapshot.
 Beta and sector are optional but load-bearing: without them the model flattens
 to a plain exposure calculation. If Alpaca doesn't supply them, we should agree
 on a static lookup table — flagged as an open question in `WIP.md`.
+
+Each option bid must pass the quote fields the analytics layer actually
+received: `quote_bid`, `quote_ask`, `volume`, and `open_interest`. Missing data
+is returned as `unavailable`, never filled with zero. Multi-leg bids currently
+use conservative aggregate values. `PUT_SPREAD` and `COLLAR` also require an
+explicit `max_payout`.
 
 ## Frontend — what you can rely on
 
@@ -85,16 +95,18 @@ for display.
 Report shape:
 
 ```
-schema_version      "1.0.0"  — pin this; a mismatch should fail loudly
+schema_version      "1.1.0"  — pin this; a mismatch should fail loudly
 account_id
 generated_at        ISO-8601
-exposure            gross/net/long/short, beta_adjusted, leverage, cash_ratio
+exposure            gross/net/long/short, leverage, symbol/sector exposure
 concentration       hhi, effective_positions, top_1/3/5 weights, sector_weights
 drawdown            max, current, recovery_needed, ulcer_index, observations
+volatility           per-symbol estimates with explicit availability status
 risk                stress_loss, split into directional + idiosyncratic, VaR
 score               total, grade (A–F), verdict, components[], flags[]
-hedge_evaluations   ranked; index 0 is the winner when is_viable
+hedge_evaluations   normalized components, liquidity, max risk, ranked result
 recommended_bid_id  string or null
+shadow_comparison   protected/unprotected outcome and net Protection Delta
 ```
 
 Two fields worth building UI around specifically. Each entry in
@@ -107,6 +119,14 @@ list without client-side sorting.
 `recommended_bid_id` is `null` when no bid passed the viability gates. That is
 a real state, not an error — render it as "no acceptable hedge offered", not as
 a loading failure.
+
+`volatility.status` and `hedge_evaluations[].liquidity.status` distinguish
+`available`, `unavailable`, and `inconclusive`. Nullable numeric fields stay
+JSON `null`; do not coerce them to zero in TypeScript.
+
+The backend Monitor should call `assess_state_drift(previous, current)`. When
+`is_stale` is true, emit `reauction_required` and rerun `analyse()` using fresh
+quotes. Do not mutate an old report or bid in place.
 
 `verdict` is one of `protected` / `acceptable` / `exposed` / `critical`, and
 `grade` is `A`–`F`.
