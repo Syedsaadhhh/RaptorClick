@@ -1,0 +1,24 @@
+{
+  "run_id": "run-sanitized-demo",
+  "current_state": "approved",
+  "portfolio": {
+    "source": "synthetic-demo",
+    "account_status": "PAPER_DEMO",
+    "equity": 120000.0,
+    "gross_exposure": 108680.0
+  },
+  "auction": {
+    "candidate_count": 3,
+    "selected_bid_id": "bid-1",
+    "ranking": "deterministic"
+  },
+  "risk_verdict": {
+    "status": "approved",
+    "failed_rules": []
+  },
+  "execution": {
+    "default_mode": "dry_run",
+    "paper_execution_enabled": false
+  },
+  "note": "Sanitized synthetic evidence only. No account identifier, API key, private order, or live-money claim is included."
+}
