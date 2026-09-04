@@ -2,6 +2,7 @@ import asyncio
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from app.models import ExecuteRequest, ExecutionReceipt, HedgeRun, PortfolioSnapshot, ReauctionRequest, StartRunRequest
@@ -11,6 +12,19 @@ from app.settings import Settings, get_settings
 from app.store import REACTIONS_BY_IDEMPOTENCY, RECEIPTS_BY_IDEMPOTENCY, RUNS
 
 app = FastAPI(title="RaptorClick API", version="0.1.0")
+
+_runtime_settings = get_settings()
+_allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+if _runtime_settings.frontend_origin:
+    _allowed_origins.append(_runtime_settings.frontend_origin.rstrip("/"))
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_allowed_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 @app.get("/healthz")
 async def healthz() -> dict[str, str]:
