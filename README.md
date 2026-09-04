@@ -178,6 +178,16 @@ The official event runs from August 28 through September 4, 2026. The team uses 
 
 Setup commands are not published yet because the repository does not contain an executable build. Each scaffold PR must include its own environment example and verified start command. This section will be replaced as soon as the first integrated vertical slice runs locally.
 
+### Frontend Development
+
+To run the frontend control room and perform type checks locally:
+
+```bash
+cd frontend
+npm install
+npm run check
+npm run dev
+
 ## Official references
 
 - [Alpaca AI Trading Agents Hackathon](https://lablab.ai/ai-hackathons/alpaca-ai-trading-agents-hackathon)
