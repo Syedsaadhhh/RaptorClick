@@ -154,10 +154,10 @@ Schemas will be versioned. Frontend fixtures must be labelled as demo data and m
 | Deterministic analytics and tests | Merged |
 | FastAPI + Alpaca/Featherless vertical slice | Merged |
 | React control-room UI | Merged |
-| Frontend live REST/SSE adapter | In progress — Issue #7 |
-| Vercel deployment | Frontend and API deployed; adapter wiring remains in Issue #7 |
+| Frontend live REST/SSE adapter | Merged and deployed |
+| Vercel deployment | Frontend and API deployed and verified |
 | Durable run/receipt storage | Not yet implemented |
-| Pitch/demo package | In progress — Issue #8 |
+| Pitch/demo package | Completed and submitted |
 
 ## Team
 
