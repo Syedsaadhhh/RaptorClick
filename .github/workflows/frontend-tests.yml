@@ -1,0 +1,40 @@
+name: Frontend checks
+
+on:
+  pull_request:
+    paths:
+      - "frontend/**"
+      - "shared/**"
+      - "server/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig*.json"
+      - "vite.config.ts"
+      - ".github/workflows/frontend-tests.yml"
+  push:
+    branches:
+      - feature/frontend-control-room
+    paths:
+      - "frontend/**"
+      - "shared/**"
+      - "server/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig*.json"
+      - "vite.config.ts"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Type check
+        run: npm run check
+      - name: Production build
+        run: npm run build
