@@ -21,7 +21,7 @@ const contracts = [
   { name: "AuctionRanking", role: "Normalized ranking output used by the Hedge Auction panel", source: "demo/models.ts" },
   { name: "RiskVerdict", role: "Policy status plus explicit compliance checks and rationale", source: "demo/models.ts" },
   { name: "ExecutionReceipt", role: "Order label, status, detail, and mock execution identifier", source: "demo/mockData.ts" },
-  { name: "HedgeRun", role: "The adapter-level aggregate returned for any RunState", source: "lib/demoApi.ts" },
+  { name: "HedgeRun", role: "The adapter-level aggregate used by the control room", source: "lib/liveApi.ts" },
 ];
 
 function DirectoryShell({ active, children, eyebrow, title, lede, showCode = true }: { active: "architecture" | "docs" | "audit"; children: React.ReactNode; eyebrow: string; title: string; lede: string; showCode?: boolean }) {
@@ -36,8 +36,8 @@ export function SystemArchitecture() {
 }
 
 export function SystemDocs() {
-  return <DirectoryShell active="docs" eyebrow="System docs / contracts" title="Contracts before components." lede="A clean adapter boundary keeps the interface replaceable. The current surface uses typed demo records; REST or SSE can occupy the same seam later.">
-    <section className="docs-layout"><div className="docs-contract-list"><div className="directory-section-heading"><div><p className="eyebrow">Typed models / source map</p><h2>Data contracts in the open.</h2></div><span className="mono muted">07 MODELS</span></div>{contracts.map((contract) => <div className="contract-row" key={contract.name}><div className="contract-icon"><Braces size={15} /></div><div><h3>{contract.name}</h3><p>{contract.role}</p></div><span className="contract-source mono">{contract.source}</span></div>)}</div><aside className="docs-adapter glass-panel"><p className="eyebrow">Adapter boundary</p><h2>demoApi</h2><p>One read path today. A replaceable seam tomorrow.</p><div className="adapter-code"><span>GET /runs/:state</span><span>→ getRun(state)</span><span>→ HedgeRun</span></div><div className="adapter-status"><span className="green-dot" /> REST / SSE READY</div><Link href="/control-room" className="overview-cta">Open the control room <ArrowUpRight size={14} /></Link></aside></section>
+  return <DirectoryShell active="docs" eyebrow="System docs / contracts" title="Contracts before components." lede="A clean adapter boundary keeps the interface replaceable. With an API URL configured, the control room starts a typed REST run and observes named SSE events; offline replay is an explicit fallback.">
+    <section className="docs-layout"><div className="docs-contract-list"><div className="directory-section-heading"><div><p className="eyebrow">Typed models / source map</p><h2>Data contracts in the open.</h2></div><span className="mono muted">07 MODELS</span></div>{contracts.map((contract) => <div className="contract-row" key={contract.name}><div className="contract-icon"><Braces size={15} /></div><div><h3>{contract.name}</h3><p>{contract.role}</p></div><span className="contract-source mono">{contract.source}</span></div>)}</div><aside className="docs-adapter glass-panel"><p className="eyebrow">Adapter boundary</p><h2>liveApi</h2><p>Start a typed run over REST, then consume named run events over SSE.</p><div className="adapter-code"><span>POST /api/v1/runs</span><span>→ SSE run_event</span><span>→ HedgeRun</span></div><div className="adapter-status"><span className="green-dot" /> REST / SSE CONNECTED</div><Link href="/control-room" className="overview-cta">Open the control room <ArrowUpRight size={14} /></Link></aside></section>
   </DirectoryShell>;
 }
 

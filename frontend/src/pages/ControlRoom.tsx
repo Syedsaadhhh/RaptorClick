@@ -33,6 +33,7 @@ const HeroFluidCanvas = lazy(() => import("@/components/HeroFluidCanvas"));
 import DirectoryChrome from "@/components/DirectoryChrome";
 import { ASSET_URLS } from "@/lib/assets";
 import { demoApi } from "@/lib/demoApi";
+import { isLiveApiConfigured, liveApi, mapApiRun } from "@/lib/liveApi";
 import {
   getHedgeRun,
   RUN_STATE_INDEX,
@@ -342,14 +343,14 @@ function TimelineRow({ event }: { event: RunEvent }) {
   );
 }
 
-function OrderReceipts({ receipts }: { receipts: ExecutionReceipt[] }) {
+function OrderReceipts({ receipts, live }: { receipts: ExecutionReceipt[]; live: boolean }) {
   const statusIcon = (status: ExecutionReceipt["status"]) => status === "filled" ? <Check size={14} /> : status === "rejected" || status === "failed" ? <X size={14} /> : status === "submitted" ? <ArrowUpRight size={14} /> : <Command size={14} />;
   return (
     <section className="glass-panel dashboard-panel panel-orders">
       <PanelHeader eyebrow="05 / order receipt" title="Execution states" meta="paper first" icon={<Zap size={16} />} />
       <p className="panel-description">Receipts are stateful records. A paper order is not a fill, and a failed run never implies execution.</p>
       {receipts.length === 0 ? <div className="empty-state empty-state-tall"><Command size={18} /><strong>No order receipts</strong><span>Start a replay to create a dry-run record.</span></div> : <div className="receipt-grid">{receipts.map((receipt) => <div className={`receipt-card receipt-${receipt.status}`} key={receipt.id}><div className="receipt-top"><span className="receipt-icon">{statusIcon(receipt.status)}</span><span className="receipt-status">{receipt.status}</span></div><strong>{receipt.label}</strong><span className="receipt-detail">{receipt.detail}</span><span className="receipt-id mono">{receipt.executionId}</span></div>)}</div>}
-      <div className="panel-footer"><span><Wifi size={13} /> Broker link / simulated</span><span className="mono">READ-ONLY DEMO</span></div>
+      <div className="panel-footer"><span><Wifi size={13} /> Broker link / {live ? "Alpaca paper" : "replay"}</span><span className="mono">{live ? "PAPER ONLY" : "SYNTHETIC-DEMO"}</span></div>
     </section>
   );
 }
@@ -363,14 +364,20 @@ export default function Home() {
   const [state, setState] = useState<RunState>(initialState);
   const [run, setRun] = useState<HedgeRun>(() => getHedgeRun("idle"));
   const [isPlaying, setIsPlaying] = useState(false);
+  const [liveRun, setLiveRun] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const streamCleanup = useRef<(() => void) | null>(null);
 
   useEffect(() => {
+    if (liveRun) return;
     let cancelled = false;
     demoApi.getRun(state).then((snapshot) => {
       if (!cancelled) setRun(snapshot);
     });
     return () => { cancelled = true; };
-  }, [state]);
+  }, [state, liveRun]);
+
+  useEffect(() => () => streamCleanup.current?.(), []);
 
   useEffect(() => {
     if (!isPlaying) return;
@@ -394,8 +401,49 @@ export default function Home() {
   const completionPct = useMemo(() => Math.round((RUN_STATE_INDEX[state] / (replayStates.length - 1)) * 100), [state]);
 
   const playReplay = () => {
+    setLiveRun(false);
+    setApiError(null);
     setState("idle");
     setIsPlaying(true);
+  };
+  const startLiveRun = async () => {
+    setIsPlaying(true);
+    setApiError(null);
+    streamCleanup.current?.();
+    try {
+      const apiRun = await liveApi.startRun();
+      const mapped = mapApiRun(apiRun);
+      setRun(mapped);
+      setState(mapped.currentState);
+      setLiveRun(true);
+      streamCleanup.current = liveApi.subscribe(mapped.runId, (event) => setState(event.state), () => undefined);
+    } catch (error) {
+      setLiveRun(false);
+      setApiError(error instanceof Error ? error.message : "The live API could not start a run.");
+    } finally {
+      setIsPlaying(false);
+    }
+  };
+  const triggerReauction = async () => {
+    setIsPlaying(false);
+    if (!liveRun) { setState("reauction_required"); return; }
+    try {
+      const mapped = mapApiRun(await liveApi.reauction(run.runId));
+      setRun(mapped);
+      setState(mapped.currentState);
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Re-auction could not be started.");
+    }
+  };
+  const executeDryRun = async () => {
+    try {
+      await liveApi.executeDryRun(run.runId);
+      const mapped = mapApiRun(await liveApi.getRun(run.runId));
+      setRun(mapped);
+      setState(mapped.currentState);
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Dry-run could not be completed.");
+    }
   };
   const nextStep = () => {
     setIsPlaying(false);
@@ -404,6 +452,8 @@ export default function Home() {
   };
   const reset = () => {
     setIsPlaying(false);
+    setLiveRun(false);
+    streamCleanup.current?.();
     setState("idle");
   };
 
@@ -416,16 +466,18 @@ export default function Home() {
       <div className="page-frame">
         <StateRail state={state} onSelect={(next) => { setIsPlaying(false); setState(next); }} />
 
-        <div className="control-strip">
-          <div className="control-copy"><span className="control-kicker">RUNNER</span><span className="control-description">{currentMeta.description}</span><span className="control-progress"><span style={{ width: `${completionPct}%` }} /></span></div>
-          <div className="control-actions">
-            <ControlButton onClick={playReplay} variant="primary"><Play size={14} fill="currentColor" /> {isPlaying ? "Replaying" : "Play Replay"}</ControlButton>
-            <ControlButton onClick={nextStep} disabled={state === "failed"}><ChevronRight size={15} /> Next Step</ControlButton>
-            <ControlButton onClick={() => { setIsPlaying(false); setState("risk_rejected"); }} variant="danger"><ShieldX size={14} /> Simulate Risk Reject</ControlButton>
-            <ControlButton onClick={() => { setIsPlaying(false); setState("reauction_required"); }}><GitBranch size={14} /> Trigger Re-Auction</ControlButton>
+          <div className="control-strip">
+            <div className="control-copy"><span className="control-kicker">RUNNER</span><span className="control-description">{currentMeta.description}</span><span className="control-progress"><span style={{ width: `${completionPct}%` }} /></span></div>
+            <div className="control-actions">
+            <ControlButton onClick={isLiveApiConfigured ? startLiveRun : playReplay} variant="primary"><Play size={14} fill="currentColor" /> {isPlaying ? "Starting" : isLiveApiConfigured ? "Start Live Run" : "Play Replay"}</ControlButton>
+            <ControlButton onClick={nextStep} disabled={state === "failed" || liveRun}><ChevronRight size={15} /> Next Step</ControlButton>
+            <ControlButton onClick={() => { setIsPlaying(false); setLiveRun(false); streamCleanup.current?.(); setState("risk_rejected"); }} variant="danger"><ShieldX size={14} /> Simulate Risk Reject</ControlButton>
+            {liveRun && state === "approved" && <ControlButton onClick={executeDryRun}><Check size={14} /> Dry Run</ControlButton>}
+            <ControlButton onClick={triggerReauction}><GitBranch size={14} /> Trigger Re-Auction</ControlButton>
             <ControlButton onClick={reset}><RotateCcw size={14} /> Reset</ControlButton>
           </div>
-        </div>
+          </div>
+        {apiError && <div className="control-strip" role="alert"><div className="control-copy"><span className="control-kicker">LIVE API</span><span className="control-description">{apiError}</span></div></div>}
 
         <EdgeBanner state={state} />
 
@@ -436,7 +488,7 @@ export default function Home() {
             <h1>Protection is a<br /><em>state machine.</em></h1>
             <p className="hero-description">RaptorClick watches the portfolio, stress-tests the book, auctions executable protection, and only routes an order after the Risk Governor clears the path.</p>
             <div className="hero-explainer"><div className="explainer-icon"><Hexagon size={18} /></div><div><strong>See the full loop in under 30 seconds.</strong><span>Replay every gate, verdict, and receipt without losing the context around the book.</span></div></div>
-            <div className="hero-footnote"><span className="mono">NORTHSTAR / GLOBAL MACRO</span><span><span className="green-dot" /> 186 POSITIONS MONITORED</span></div>
+            <div className="hero-footnote"><span className="mono">{liveRun ? "ALPACA PAPER / LIVE API" : "SYNTHETIC-DEMO / REPLAY"}</span><span><span className="green-dot" /> {liveRun ? "LIVE ACCOUNT SNAPSHOT" : "REPLAYABLE WORKFLOW"}</span></div>
           </div>
           <div className="hero-art-stage">
             <div className="hero-art-grid" />
@@ -456,7 +508,7 @@ export default function Home() {
               <div className="control-field-readout"><span className="mono">ACTIVE PATH</span><strong>{currentMeta.short} / {completionPct}%</strong><small>Next gate is explicit.</small></div>
             </div>
           </div>
-          <div className="hero-signal-card"><div className="signal-orbit" /><span className="mono signal-label">PROTECTIVE<br />DELTA</span><strong>−5.9 pp</strong><span className="signal-detail">peak drawdown<br />contained</span></div>
+          <div className="hero-signal-card"><div className="signal-orbit" /><span className="mono signal-label">PROTECTIVE<br />DELTA</span><strong>{run.shadowComparison[0]?.protectionDelta ?? "--"}</strong><span className="signal-detail">{run.shadowComparison[0]?.unit ?? "pending"}<br />comparison</span></div>
         </section>
 
         <section className="hero-data-grid"><HeroSnapshot run={run} loading={state === "loading_portfolio"} /><ShadowBook run={run} /></section>
@@ -468,10 +520,10 @@ export default function Home() {
           <HedgeAuction bids={run.bids} state={state} />
           <RiskGovernor verdict={run.riskVerdict} />
           <Timeline events={run.events} />
-          <OrderReceipts receipts={run.receipts} />
+          <OrderReceipts receipts={run.receipts} live={liveRun} />
         </section>
 
-        <footer className="app-footer"><span><span className="green-dot" /> RaptorClick / protective intelligence layer</span><span className="mono">DEMO DATA · READ ONLY · v0.9.7</span><span className="mono">© 2026 RAPTORCLICK</span></footer>
+        <footer className="app-footer"><span><span className="green-dot" /> RaptorClick / protective intelligence layer</span><span className="mono">{liveRun ? "ALPACA PAPER · READ ONLY" : "SYNTHETIC-DEMO · REPLAY"}</span><span className="mono">© 2026 RAPTORCLICK</span></footer>
       </div>
     </main>
   );

@@ -1,4 +1,4 @@
-/* Obsidian Sentinel / live preview widget: a compact, legible state-machine surface that keeps the hero operational without character imagery. */
+/* Replay preview widget: a compact, labelled walkthrough of the RaptorClick state machine. */
 
 import { ArrowUpRight, ChevronRight, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -62,7 +62,7 @@ export default function StateMachinePreview() {
     <div className="state-preview" aria-label="Live State Machine Preview">
       <div className="state-preview-topline">
         <div>
-          <p className="eyebrow">Live preview / control room</p>
+          <p className="eyebrow">Replay preview / control room</p>
           <h2>State machine monitor</h2>
         </div>
         <span className={`preview-status preview-status-${TONE_BY_STATE[state]}`}><span className="status-dot" />{STATE_META[state].short}</span>

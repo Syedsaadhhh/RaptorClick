@@ -8,12 +8,12 @@ RaptorClick does not ask one model to guess the next winning trade. It asks a st
 
 Specialized hedge agents compete to protect a real Alpaca paper portfolio. Their proposals are stress-tested, ranked against an unprotected shadow portfolio, checked by deterministic risk rules, and either rejected or sent to Alpaca for paper execution.
 
-**Current status:** the FastAPI vertical slice, deterministic analytics, and React control room are merged into `main` and deployed. The dashboard retains a labelled replay adapter while the live REST/SSE adapter is completed in [Issue #7](https://github.com/Syedsaadhhh/RaptorClick/issues/7). Backend run state is currently in memory, so serverless persistence is not yet production-ready. Nothing here is a claim of profitability or live-money readiness.
+**Current status:** the FastAPI vertical slice, deterministic analytics, and React control room are merged into `main` and deployed. The control room starts a typed API run through REST and consumes named SSE run events when `VITE_API_BASE_URL` is configured; its labelled replay remains a fallback for offline demos. Backend run state is currently in memory, so serverless persistence is not yet production-ready. Nothing here is a claim of profitability or live-money readiness.
 
 ## Live deployment
 
 - **Control room:** [raptor-click.vercel.app](https://raptor-click.vercel.app)
-- **API:** deployed separately on Vercel; its health endpoint has been verified. The frontend will use it once Issue #7 replaces the replay adapter.
+- **API:** deployed separately on Vercel; its health endpoint and Alpaca paper portfolio route have been verified.
 
 ## Why this exists
 
@@ -202,7 +202,7 @@ pnpm install
 pnpm dev
 ```
 
-The current control room uses a clearly labelled replay adapter. Once the live adapter is merged, set `VITE_API_BASE_URL=http://localhost:8000` locally or to the deployed API URL in Vercel.
+Set `VITE_API_BASE_URL=http://localhost:8000` locally or to the deployed API URL in Vercel. With that value configured, **Start Live Run** uses REST and named SSE events; without it, the dashboard stays in its clearly labelled replay mode.
 
 ### Verification
 
