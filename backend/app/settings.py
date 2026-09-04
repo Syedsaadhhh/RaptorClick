@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     featherless_base_url: str = Field(default="https://api.featherless.ai/v1", validation_alias="FEATHERLESS_BASE_URL")
     featherless_model: str = Field(default="zai-org/GLM-5.3-Flash", validation_alias="FEATHERLESS_MODEL")
     reauction_drift_threshold_pct: float = Field(default=1.5, validation_alias="REAUCTION_DRIFT_THRESHOLD_PCT")
+    frontend_origin: str | None = Field(default=None, validation_alias="FRONTEND_ORIGIN")
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
