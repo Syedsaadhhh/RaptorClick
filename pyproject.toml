@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "raptor-analytics"
+version = "0.1.0"
+description = "Deterministic protection analytics for RaptorClick"
+# Python 3.10 targets the sandbox during the hackathon; no forward deps so we
+# never block a teammate on a Python upgrade mid-event.
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --disable-warnings"
