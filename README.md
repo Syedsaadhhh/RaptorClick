@@ -8,7 +8,7 @@ RaptorClick does not ask one model to guess the next winning trade. It asks a st
 
 Specialized hedge agents compete to protect a real Alpaca paper portfolio. Their proposals are stress-tested, ranked against an unprotected shadow portfolio, checked by deterministic risk rules, and either rejected or sent to Alpaca for paper execution.
 
-**Current status:** pre-MVP build sprint. The architecture and completion contract are locked; implementation is now beginning. Nothing in this repository should be read as a claim of live profitability or production readiness.
+**Current status:** the FastAPI vertical slice, deterministic analytics, and React control room are merged into `main`. The dashboard retains a labelled replay adapter while live REST/SSE wiring is completed in [Issue #7](https://github.com/Syedsaadhhh/RaptorClick/issues/7). Backend run state is currently in memory, so serverless persistence is not yet production-ready. Nothing here is a claim of profitability or live-money readiness.
 
 ## Why this exists
 
@@ -112,7 +112,7 @@ The MVP dashboard will expose:
 
 The activity stream will show tool events, concise decision summaries, risk checks, and state transitions. It will not expose private chain-of-thought.
 
-## Planned stack
+## Stack
 
 | Layer | Choice |
 |---|---|
@@ -142,18 +142,17 @@ These contracts are intentionally small so frontend and backend work can proceed
 
 Schemas will be versioned. Frontend fixtures must be labelled as demo data and match the backend models.
 
-## Build plan
+## Delivery status
 
-| Date | Checkpoint |
+| Area | State |
 |---|---|
-| August 30 | Repository, contracts, task ownership and scaffolds |
-| August 31 | First frontend, analytics and backend pull requests |
-| September 1 | Mock contracts replaced by integrated API and SSE flow |
-| September 2 | End-to-end paper-trading rehearsal and controlled re-auction |
-| September 3 | Feature freeze, testing, demo recording and pitch lock |
-| September 4 | Verification and submission only |
-
-The official event runs from August 28 through September 4, 2026. The team uses September 3 as its internal completion deadline.
+| Deterministic analytics and tests | Merged |
+| FastAPI + Alpaca/Featherless vertical slice | Merged |
+| React control-room UI | Merged |
+| Frontend live REST/SSE adapter | In progress — Issue #7 |
+| Vercel configuration | Merged; projects still need importing |
+| Durable run/receipt storage | Not yet implemented |
+| Pitch/demo package | In progress — Issue #8 |
 
 ## Team
 
@@ -174,19 +173,59 @@ The official event runs from August 28 through September 4, 2026. The team uses 
 - Execution defaults to dry-run. Paper trading must be explicitly enabled.
 - A failed risk rule returns a structured rejection; it never silently falls back to approval.
 
-## Local setup
+## Run locally
 
-Setup commands are not published yet because the repository does not contain an executable build. Each scaffold PR must include its own environment example and verified start command. This section will be replaced as soon as the first integrated vertical slice runs locally.
-
-### Frontend Development
-
-To run the frontend control room and perform type checks locally:
+### Backend
 
 ```bash
-cd frontend
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+uvicorn app.main:app --reload --port 8000
+```
+
+Put private credentials only in `backend/.env`. Keep `ENABLE_PAPER_EXECUTION=false` until the dry-run is verified.
+
+### Frontend
+
+From the repository root:
+
+```bash
+cp .env.example .env
+# Set VITE_API_BASE_URL=http://localhost:8000
 npm install
-npm run check
 npm run dev
+```
+
+### Verification
+
+```bash
+curl http://localhost:8000/healthz
+npm run check
+npm run build
+pytest
+cd backend && pytest
+```
+
+## Environment variables
+
+Frontend (public): `VITE_API_BASE_URL`.
+
+Backend (private): `APCA_API_KEY_ID`, `APCA_API_SECRET_KEY`, `ALPACA_PAPER_BASE_URL`, `ALPACA_DATA_BASE_URL`, `FEATHERLESS_API_KEY`, `FEATHERLESS_BASE_URL`, `FEATHERLESS_MODEL`, `RAPTORCLICK_DEMO_MODE`, `ENABLE_PAPER_EXECUTION`, and `FRONTEND_ORIGIN`.
+
+Anything prefixed with `VITE_` is exposed to the browser. Alpaca and Featherless secrets belong only in the backend environment.
+
+## Deploy on Vercel
+
+Create two Vercel projects from this repository:
+
+1. **Backend:** root directory `backend`, Framework Preset **Other**. Add the private backend variables, deploy, and verify `https://<backend>.vercel.app/healthz`.
+2. **Frontend:** repository root. Set `VITE_API_BASE_URL=https://<backend>.vercel.app`, then deploy.
+3. Set backend `FRONTEND_ORIGIN=https://<frontend>.vercel.app` and redeploy the backend.
+
+Start with `ENABLE_PAPER_EXECUTION=false`. The root and backend `vercel.json` files contain the required build/function configuration.
 
 ## Official references
 
