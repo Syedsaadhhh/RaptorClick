@@ -63,7 +63,7 @@ const baseEvents: RunEvent[] = [
   { id: "evt-07", time: "14:32:18", actor: "RISK GOVERNOR", message: "Selected hedge cleared all portfolio policy rules", source: "POLICY ENGINE", state: "approved", tone: "positive" },
   { id: "evt-08", time: "14:32:21", actor: "EXECUTION", message: "Dry-run matched 1,200 contracts · no market order sent", source: "EXECUTION SIM", state: "dry_run_complete", tone: "positive" },
   { id: "evt-09", time: "14:32:23", actor: "EXECUTION", message: "Paper order staged with broker routing metadata", source: "PAPER ROUTER", state: "paper_order_submitted", tone: "active" },
-  { id: "evt-10", time: "14:32:27", actor: "EXECUTION", message: "Order receipt confirmed · protection state is active", source: "EXECUTION API", state: "completed", tone: "positive" },
+  { id: "evt-10", time: "14:32:27", actor: "EXECUTION", message: "Paper execution receipt confirmed · protection state is active", source: "EXECUTION API", state: "completed", tone: "positive" },
   { id: "evt-11", time: "14:32:30", actor: "OPERATOR", message: "Underlying book moved 2.1% · new inputs require auction refresh", source: "RUNNER", state: "reauction_required", tone: "warning" },
   { id: "evt-12", time: "14:32:33", actor: "SYSTEM", message: "Auction halted after venue acknowledgement timeout", source: "BID STREAM", state: "failed", tone: "danger" },
 ];
@@ -71,7 +71,7 @@ const baseEvents: RunEvent[] = [
 const baseReceipts: ExecutionReceipt[] = [
   { id: "rcpt-01", label: "Dry run", status: "dry-run", executionId: "SIM-8K2Q-94", detail: "1,200 contracts · selected bid-01" },
   { id: "rcpt-02", label: "Paper order", status: "submitted", executionId: "PPR-4H7M-21", detail: "Routing staged · awaiting venue ack" },
-  { id: "rcpt-03", label: "Live fill", status: "filled", executionId: "FIL-2N8A-07", detail: "Protection state active · 14:32:27 UTC" },
+  { id: "rcpt-03", label: "Paper fill", status: "filled", executionId: "PPR-FIL-2N8A-07", detail: "Paper protection state active · 14:32:27 UTC" },
   { id: "rcpt-04", label: "Rejected", status: "rejected", executionId: "RJT-9V1C-52", detail: "Premium budget rule · no order sent" },
   { id: "rcpt-05", label: "Failed", status: "failed", executionId: "ERR-6P0D-18", detail: "Venue acknowledgement timeout · safe halt" },
 ];
@@ -96,7 +96,7 @@ function getVerdict(state: RunState): RiskVerdict {
     return {
       status: "pending",
       headline: "Execution halted",
-      rationale: "The venue did not acknowledge the order inside the execution window. No live order was confirmed.",
+      rationale: "The venue did not acknowledge the paper order inside the execution window. No paper fill was confirmed.",
       checks: checks.map((check) => check.label === "Liquidity window" ? { ...check, status: "failed", detail: "Venue acknowledgement timeout" } : check),
     };
   }
