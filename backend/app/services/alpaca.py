@@ -13,6 +13,11 @@ class AlpacaClient:
     def __init__(self, settings: Settings):
         self.settings = settings
 
+    @staticmethod
+    def _api_root(url: str) -> str:
+        """Accept an Alpaca host URL with or without a copied API path suffix."""
+        return url.rstrip("/").removesuffix("/v2").removesuffix("/v1beta1")
+
     @property
     def headers(self) -> dict[str, str]:
         if not self.settings.alpaca_configured:
@@ -27,23 +32,23 @@ class AlpacaClient:
         return response.json()
 
     async def get_account(self) -> dict[str, Any]:
-        return await self._get(f"{self.settings.alpaca_paper_base_url}/v2/account")
+        return await self._get(f"{self._api_root(self.settings.alpaca_paper_base_url)}/v2/account")
 
     async def get_positions(self) -> list[dict[str, Any]]:
-        payload = await self._get(f"{self.settings.alpaca_paper_base_url}/v2/positions")
+        payload = await self._get(f"{self._api_root(self.settings.alpaca_paper_base_url)}/v2/positions")
         if not isinstance(payload, list):
             raise AlpacaError("Unexpected Alpaca positions response")
         return payload
 
     async def get_option_chain(self, underlying: str, limit: int = 100) -> dict[str, Any]:
-        payload = await self._get(f"{self.settings.alpaca_data_base_url}/v1beta1/options/snapshots/{underlying}", params={"feed": "indicative", "limit": limit})
+        payload = await self._get(f"{self._api_root(self.settings.alpaca_data_base_url)}/v1beta1/options/snapshots/{underlying}", params={"feed": "indicative", "limit": limit})
         if not isinstance(payload, dict):
             raise AlpacaError("Unexpected Alpaca option-chain response")
         return payload
 
     async def submit_paper_order(self, order: dict[str, Any]) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.post(f"{self.settings.alpaca_paper_base_url}/v2/orders", headers={**self.headers, "Content-Type": "application/json"}, json=order)
+            response = await client.post(f"{self._api_root(self.settings.alpaca_paper_base_url)}/v2/orders", headers={**self.headers, "Content-Type": "application/json"}, json=order)
         if response.status_code >= 400:
             raise AlpacaError(f"Alpaca paper order failed with status {response.status_code}")
         return response.json()
