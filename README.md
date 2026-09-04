@@ -8,7 +8,12 @@ RaptorClick does not ask one model to guess the next winning trade. It asks a st
 
 Specialized hedge agents compete to protect a real Alpaca paper portfolio. Their proposals are stress-tested, ranked against an unprotected shadow portfolio, checked by deterministic risk rules, and either rejected or sent to Alpaca for paper execution.
 
-**Current status:** the FastAPI vertical slice, deterministic analytics, and React control room are merged into `main`. The dashboard retains a labelled replay adapter while live REST/SSE wiring is completed in [Issue #7](https://github.com/Syedsaadhhh/RaptorClick/issues/7). Backend run state is currently in memory, so serverless persistence is not yet production-ready. Nothing here is a claim of profitability or live-money readiness.
+**Current status:** the FastAPI vertical slice, deterministic analytics, and React control room are merged into `main` and deployed. The dashboard retains a labelled replay adapter while the live REST/SSE adapter is completed in [Issue #7](https://github.com/Syedsaadhhh/RaptorClick/issues/7). Backend run state is currently in memory, so serverless persistence is not yet production-ready. Nothing here is a claim of profitability or live-money readiness.
+
+## Live deployment
+
+- **Control room:** [raptor-click.vercel.app](https://raptor-click.vercel.app)
+- **API:** deployed separately on Vercel; its health endpoint has been verified. The frontend will use it once Issue #7 replaces the replay adapter.
 
 ## Why this exists
 
@@ -125,7 +130,7 @@ The activity stream will show tool events, concise decision summaries, risk chec
 | Execution mode | Dry-run first, Alpaca paper trading second |
 | Secrets | Local environment variables only; never committed |
 
-The exact dependency versions will be committed with the first implementation pull requests.
+Dependency versions are pinned in the repository lockfiles.
 
 ## API direction
 
@@ -150,7 +155,7 @@ Schemas will be versioned. Frontend fixtures must be labelled as demo data and m
 | FastAPI + Alpaca/Featherless vertical slice | Merged |
 | React control-room UI | Merged |
 | Frontend live REST/SSE adapter | In progress — Issue #7 |
-| Vercel configuration | Merged; projects still need importing |
+| Vercel deployment | Frontend and API deployed; adapter wiring remains in Issue #7 |
 | Durable run/receipt storage | Not yet implemented |
 | Pitch/demo package | In progress — Issue #8 |
 
@@ -193,18 +198,18 @@ Put private credentials only in `backend/.env`. Keep `ENABLE_PAPER_EXECUTION=fal
 From the repository root:
 
 ```bash
-cp .env.example .env
-# Set VITE_API_BASE_URL=http://localhost:8000
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
+
+The current control room uses a clearly labelled replay adapter. Once the live adapter is merged, set `VITE_API_BASE_URL=http://localhost:8000` locally or to the deployed API URL in Vercel.
 
 ### Verification
 
 ```bash
 curl http://localhost:8000/healthz
-npm run check
-npm run build
+pnpm run check
+pnpm run build
 pytest
 cd backend && pytest
 ```
@@ -241,4 +246,4 @@ RaptorClick is a hackathon prototype for research and paper-trading demonstratio
 
 ## License
 
-A license has not been selected yet. Until one is added, normal copyright restrictions apply.
+This project is licensed under the [MIT License](LICENSE).
